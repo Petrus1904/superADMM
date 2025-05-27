@@ -23,7 +23,7 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 ## MATLAB
 - Download or clone this package
 - Ensure that MATLAB `mex` add-on (code-generation) is installed, and `gcc` is installed as mex compiler
-- Verify `mex -setup` that `gcc` is the default compiler
+- Verify with `mex -setup` that `gcc` is the default compiler
 - run `setup.m`
 - Enjoy your fast solver in Matlab with `superADMM.m`
 # How to Cite
