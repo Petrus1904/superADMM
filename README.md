@@ -20,11 +20,16 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 - `gcc -shared -o superADMM.dll superADMM.c csparse.c ldl.c -I"C:\PATHtoOPENBLAS\include" -L"C:\PATHtoOPENBLAS\lib" -lopenblas -DBUILD_DLL`
 - Enjoy your fast solver in Python with `import superADMM`
 
-## MATLAB
+## MATLAB (Express installation)
+- Download `install.m`
+- run `install.m`
+- Enjoy your fast solver in MATLAB with `superADMM.m`
+
+## MATLAB (Manual installation)
 - Download or clone this package
 - Ensure that MATLAB `mex` add-on (code-generation) is installed, and `gcc` is installed as mex compiler
 - Verify with `mex -setup` that `gcc` is the default compiler
 - run `setup.m`
-- Enjoy your fast solver in Matlab with `superADMM.m`
+- Enjoy your fast solver in MATLAB with `superADMM.m`
 # How to Cite
 include bibtex
