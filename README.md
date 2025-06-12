@@ -8,8 +8,6 @@ subject to   l <= Ax <= u
 ```
 where `x in R^n` is the optimization variable, `P in R^(n x n)` and `q in R^n` describe the quadratic cost function (P is positive semi-definite), `A in R^(m x n)` is the linear constraint mapping and `l in R^m`, `u in R^m` denote the lower and upper bounds of the constraints. Note that by setting `l_i = u_i` for some index `i`, one can also include equality constraints in the problem. Furthermore, `l_i = -inf` or `u_i = inf` allows to eliminate a lower or upper bound, respectively.
 
-Code will follow shortly
-
 # Installation
 Installation is currently only available in Windows, Linux and MACOS will follow later
 ## Python
