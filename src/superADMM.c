@@ -1282,46 +1282,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
     return eflag;
 }
 
-/*
-int LDLtest(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMint *Pcolidx, ADMMint Pnnz, ADMMint nPrim, ADMMfloat* q, ADMMfloat *x){
-    ADMMint LSi = 0;
-    css* Si;
-    const cs Pi = {Pnnz, nPrim, nPrim, Prowptr, Pcolidx, Pdata, -1};
-    Si = LDL_symb(&Pi, 0);
-    ADMMfloat* tmp_xi; //temporary vector of size x
-    tmp_xi = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
-    cblas_copy(nPrim, q, 1, x, 1);
-    struct timespec tstar;
-    clock_gettime(CLOCK_MONOTONIC, &tstar);
-    LSi = LDLsolve(&Pi, x, Si);
-    print("native LDL took:  ");
-    printTime(&tstar);
-    cblas_copy(nPrim, q, 1, tmp_xi, 1);
-    cblas_scal(nPrim, -1.0, tmp_xi, 1);
-    cs_gaxpy(&Pi, x, tmp_xi); //tmpq = q + P*x
-    double rBK = cblas_amax(nPrim, tmp_xi, 1);
-    print("LDL err = %.9e \n", rBK);
-
-    Si = LDL_symb(&Pi, 0);
-    cblas_copy(nPrim, q, 1, x, 1);
-    clock_gettime(CLOCK_MONOTONIC, &tstar);
-    LSi = BK_LDLsolve(&Pi, x, Si);
-    print("BK LDL took:  ");
-    printTime(&tstar);
-    cblas_copy(nPrim, q, 1, tmp_xi, 1);
-    cblas_scal(nPrim, -1.0, tmp_xi, 1);
-    cs_gaxpy(&Pi, x, tmp_xi); //tmpq = q + P*x
-    rBK = cblas_amax(nPrim, tmp_xi, 1);
-    print("BK err = %.9e\n", rBK);
-
-    cs_sfree(Si);
-    free(tmp_xi);
-    print("Error = %d \n", LSi);
-
-    return 0;
-}
-*/
-
 int main() {
 
     printf("Hello World");
