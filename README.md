@@ -22,8 +22,8 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 
 ## MATLAB (Express installation)
 - Download the latest release
-- unzip the contents in some file
-- optionally - add this file to the default paths in MATLAB
+- unzip the contents in some folder
+- optionally - add this folder to the default paths in MATLAB
 - Enjoy your fast solver in MATLAB with `superADMM.m`
 
 ## MATLAB (Manual installation)
