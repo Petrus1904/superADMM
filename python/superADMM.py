@@ -139,6 +139,7 @@ def superADMM(P, q, A, l, u, x0 = None, y0 = None, ADMMoptions = None):
           * -1: Cholesky solver failed
           * -2: Problem infeasible
           * -3: Time limit exceeded
+          * -4: Problem non-convex
       info (obj): 
           * nIter: number of iterations
           * rPrim: primal convergence error
