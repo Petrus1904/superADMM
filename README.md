@@ -19,7 +19,7 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 - Enjoy your fast solver in Python with `import superADMM`
 
 ## MATLAB (Express installation)
-- Download the latest release
+- Download the latest release (https://github.com/Petrus1904/superADMM/releases)
 - unzip the contents in some folder
 - optionally - add this folder to the default paths in MATLAB
 - Enjoy your fast solver in MATLAB with `superADMM.m`
