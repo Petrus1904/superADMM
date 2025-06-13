@@ -1,6 +1,6 @@
 function opts = getDefaultSettings()
 %opts = GETDEFAULTSETTINGS() returns the default settings of the superADMM solver
-%   see also: superADMM, setup 
+%   see also: superADMM
 
 % (c) Peter Verheijen, 2025
 
