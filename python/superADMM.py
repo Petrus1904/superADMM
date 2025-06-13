@@ -5,10 +5,13 @@ Created on Fri Aug 16 10:24:37 2024
 @author: Peter Verheijen
 """
 import ctypes
+import os
 import numpy as np
 from scipy.sparse import csc_matrix
 
-lib = ctypes.CDLL('superADMM.dll')
+script_dir = os.path.dirname(os.path.abspath(__file__))
+dll_path = os.path.join(script_dir, 'superADMM.dll')
+lib = ctypes.CDLL(dll_path)
 
 class ADMMopts(ctypes.Structure):
     _fields_ = [("verbose", ctypes.c_int32),
@@ -139,7 +142,7 @@ def superADMM(P, q, A, l, u, x0 = None, y0 = None, ADMMoptions = None):
           * -1: Cholesky solver failed
           * -2: Problem infeasible
           * -3: Time limit exceeded
-          * -4: Problem non-convex
+          * -4: problem non-convex
       info (obj): 
           * nIter: number of iterations
           * rPrim: primal convergence error
