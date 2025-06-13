@@ -1,7 +1,7 @@
 /*
     Source file for the superADMM solver
     Created by Peter Verheijen, 2024.
-    compile string for python: gcc -shared -o superADMM.dll superADMM.c csparse.c ldl.c -I"C:\OpenBLAS\include" -L"C:\OpenBLAS\lib" -lopenblas -DBUILD_DLL
+    compile string for python: gcc -shared -o superADMM.dll ../src/superADMM.c ../src/csparse.c ../src/ldl.c -I"C:\OpenBLAS\include" -L"C:\OpenBLAS\lib" -lopenblas -DBUILD_DLL
 */
 
 
@@ -234,7 +234,7 @@ void vec_dset(const ADMMint n, const ADMMfloat alpha, ADMMfloat *x){
     }
 }
 /*
-LDL_rank1update update the sparse LDL decomposition with a rank 1 update, i.e.:ABC
+LDL_rank1update update the sparse LDL decomposition with a rank 1 update, i.e.:
 LDL^T + aa*v*v';
 but specifically, v only contains 1 nonzero entry. if the nonzero entry of v = 1, aa can be the gain of the update
 */
@@ -286,7 +286,6 @@ ADMMint LDL_rank1update(ADMMfloat *Lx,      /* L data */
             v[cc] -= p*Lx[r];
             Lx[r] += b*v[cc];
         }
-        Flag[j] = 0;
     }
     return 1;
 }
@@ -306,7 +305,6 @@ ADMMint LDL_rankn_solve(csldl* S,           /* The LDL data package */
                         ADMMint nPrim       /* nDual + nPrim is the length of b and all stuff in S */
                     ){
     
-    ADMMint updown = 1;
     ADMMint n = S->n;
     ADMMint eflag = 1;
     ADMMfloat r;
@@ -325,11 +323,11 @@ ADMMint LDL_rankn_solve(csldl* S,           /* The LDL data package */
 
     
     ADMMfloat* x = S->Y; //re-use Y here
-    ldl_perm(n, x, b, S->P);               /* x = P*b  */
-    ldl_lsolve(n, x, S->Lp, S->Li, S->Lx); /* x = L\x  */
-    ldl_dsolve(n, x, S->D);                /* x = D\x  */
-    ldl_ltsolve(n, x, S->Lp, S->Li, S->Lx);/* x = L'\x */
-    ldl_permt(n, xout, x, S->P);              /* b = P'*x */
+    ldl_perm(n, x, b, S->P);                /* x = P*b  */
+    ldl_lsolve(n, x, S->Lp, S->Li, S->Lx);  /* x = L\x  */
+    ldl_dsolve(n, x, S->D);                 /* x = D\x  */
+    ldl_ltsolve(n, x, S->Lp, S->Li, S->Lx); /* x = L'\x */
+    ldl_permt(n, xout, x, S->P);            /* xout = P'*x */
     
     return nPrim;
 }
@@ -416,11 +414,11 @@ ADMMint LDLsolve(const cs* A, ADMMfloat *b, ADMMfloat *xout, csldl* S){
     if(res >= 0){
         //succes
         ADMMfloat *x = S->Y; // re-use Y here
-        ldl_perm(n, x, b, S->P);           /* x = P*b */
-        ldl_lsolve(n, x, S->Lp, S->Li, S->Lx); /* x = L\x */
-        ldl_dsolve(n, x, S->D);            /* x = D\x*/
-        ldl_ltsolve(n, x, S->Lp, S->Li, S->Lx);/* x = L'\x*/
-        ldl_permt(n, xout, x, S->P);          /* xout = P'*x */
+        ldl_perm(n, x, b, S->P);                /* x = P*b */
+        ldl_lsolve(n, x, S->Lp, S->Li, S->Lx);  /* x = L\x */
+        ldl_dsolve(n, x, S->D);                 /* x = D\x*/
+        ldl_ltsolve(n, x, S->Lp, S->Li, S->Lx); /* x = L'\x*/
+        ldl_permt(n, xout, x, S->P);            /* xout = P'*x */
     }
 
     return res;
@@ -1281,6 +1279,46 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
 
     return eflag;
 }
+
+/*
+int LDLtest(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMint *Pcolidx, ADMMint Pnnz, ADMMint nPrim, ADMMfloat* q, ADMMfloat *x){
+    ADMMint LSi = 0;
+    css* Si;
+    const cs Pi = {Pnnz, nPrim, nPrim, Prowptr, Pcolidx, Pdata, -1};
+    Si = LDL_symb(&Pi, 0);
+    ADMMfloat* tmp_xi; //temporary vector of size x
+    tmp_xi = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
+    cblas_copy(nPrim, q, 1, x, 1);
+    struct timespec tstar;
+    clock_gettime(CLOCK_MONOTONIC, &tstar);
+    LSi = LDLsolve(&Pi, x, Si);
+    print("native LDL took:  ");
+    printTime(&tstar);
+    cblas_copy(nPrim, q, 1, tmp_xi, 1);
+    cblas_scal(nPrim, -1.0, tmp_xi, 1);
+    cs_gaxpy(&Pi, x, tmp_xi); //tmpq = q + P*x
+    double rBK = cblas_amax(nPrim, tmp_xi, 1);
+    print("LDL err = %.9e \n", rBK);
+
+    Si = LDL_symb(&Pi, 0);
+    cblas_copy(nPrim, q, 1, x, 1);
+    clock_gettime(CLOCK_MONOTONIC, &tstar);
+    LSi = BK_LDLsolve(&Pi, x, Si);
+    print("BK LDL took:  ");
+    printTime(&tstar);
+    cblas_copy(nPrim, q, 1, tmp_xi, 1);
+    cblas_scal(nPrim, -1.0, tmp_xi, 1);
+    cs_gaxpy(&Pi, x, tmp_xi); //tmpq = q + P*x
+    rBK = cblas_amax(nPrim, tmp_xi, 1);
+    print("BK err = %.9e\n", rBK);
+
+    cs_sfree(Si);
+    free(tmp_xi);
+    print("Error = %d \n", LSi);
+
+    return 0;
+}
+*/
 
 int main() {
 

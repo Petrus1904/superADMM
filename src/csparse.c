@@ -99,14 +99,19 @@ CSint *cs_amd ( const cs *A, CSint order )
     unsigned CSint h;
     /* --- Construct matrix C ----------------------------------------------- */
     if (!A || order < 0) return (NULL);    /* check inputs; quick return */
-    AT = cs_transpose (A, 0);		    /* compute A' */
-    if (!AT) return (NULL);
+    // AT = cs_transpose (A, 0);		    /* compute A' */
+    // if (!AT) return (NULL);
     m = A->m; n = A->n;
     dense = CS_MAX (16, 10 * sqrt ((CSfloat) n));   /* find dense threshold */
     dense = CS_MIN (n-2, dense);
     if (order == 0 && n == m)
     {
-	    C = cs_add (A, AT, 0, 0);	    /* C = A+A' */
+        //Peter: sorry man, but I already make perfect symmetric matrices.
+        //so no transposed, no add -- just copy :)
+        C = cs_spalloc(A->m, A->n, A->nzmax, 0, 0);
+        for(i = 0; i < A->n+1; i++) C->p[i] = A->p[i];
+        for(j = 0; j<A->nzmax; j++) C->i[j] = A->i[j];
+	    // C = cs_add (A, AT, 0, 0);	    /* C = A+A' */
     }
     else if (order == 1)
     {
@@ -128,7 +133,7 @@ CSint *cs_amd ( const cs *A, CSint order )
     {
 	    C = cs_multiply (AT, A);	    /* C=A'*A */
     }
-    cs_spfree (AT);
+    // cs_spfree (AT);
     if (!C) return (NULL);
     P = cs_malloc (n+1, sizeof (CSint));	    /* allocate result */
     ww = cs_malloc (8*(n+1), sizeof (CSint));/* get workspace */
