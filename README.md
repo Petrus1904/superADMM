@@ -21,7 +21,7 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 ## MATLAB (Express installation)
 - Download the latest release (https://github.com/Petrus1904/superADMM/releases)
 - Unzip the contents in some folder
-- run `setup.m`
+- Run `setup.m`
 - Enjoy your fast solver in MATLAB with `superADMM.m`
 
 ## MATLAB (Manual installation)
