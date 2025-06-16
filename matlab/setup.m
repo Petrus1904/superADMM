@@ -1,5 +1,4 @@
 % setup.m -- Compiles the superADMM solver from the source code
-%   it will also test that the code compiled properly.
 %   
 %   see also: superADMM, getDefaultSettings
 
