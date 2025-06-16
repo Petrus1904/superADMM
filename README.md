@@ -13,7 +13,7 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 ## Python
 - Download or clone this package
 - install `gcc` (if you havent already)
-- Download and unpack **OpenBLAS** binaries (OpenBLAS-x.x.xx_x86.zip): https://github.com/OpenMathLib/OpenBLAS/releases/tag/v0.3.29
+- Download and unpack **OpenBLAS** binaries (OpenBLAS-x.x.xx_x86.zip): https://github.com/OpenMathLib/OpenBLAS/releases
 - Open Command Prompt at the superADMM python folder
 - `gcc -shared -o superADMM.dll ../src/superADMM.c ../src/csparse.c ../src/ldl.c -I"C:\PATHtoOPENBLAS\include" -L"C:\PATHtoOPENBLAS\lib" -lopenblas -DBUILD_DLL`
 - Enjoy your fast solver in Python with `import superADMM`
