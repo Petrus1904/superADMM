@@ -1,6 +1,6 @@
 % compile.m -- Compiles the superADMM solver for first use
 %   
-%   see also: superADMM, getDefaultSettings
+%   see also: superADMM, getSuperADMMopts
 
 % (c) Peter Verheijen, 2025
 
