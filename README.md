@@ -31,6 +31,7 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 - Run `setup.m`
 - Add this folder to the default paths in MATLAB
 - Enjoy your fast solver in MATLAB with `superADMM.m`
+
 # How to Cite
 
 **APA:**
@@ -49,3 +50,10 @@ Verheijen, P.C.N., Goswami, D., and Lazar, M. (2025). *SuperADMM: Solving Quadra
       url={https://arxiv.org/abs/2506.11608}, 
 }
 ```
+
+# References
+The fast execution of various linear algebraic operations is provided by a set of third party libraries, which we list below:
+- [OpenBLAS] Wang Qian, Zhang Xianyi, Zhang Yunquan, Qing Yi, *AUGEM: Automatically Generate High Performance Dense Linear Algebra Kernels on x86 CPUs*, In the International Conference for High Performance Computing, Networking, Storage and Analysis (SC'13), Denver CO, November 2013
+- [LAPACK] E. Anderson, Z. Bai, C. Bischof, S. Blackford, J. Demmel, J.Dongarra, J. Du Croz, A. Greenbaum, S. Hammarling, A. McKenney, and D. Sorensen, *LAPACK Users' Guide,* 3rd e. Philadelphia, PA: Society for Industrial and Applied Mathematics, 1999.
+- [CSPARSE] T.A. Davis, *Direct Methods for Sparse Linear Systems.* SIAM, 2006
+- [LDL] T.A. Davis, *Algorithm 849: A concise sparse cholesky factorization package,* ACM Trans. Math. Softw. vol. 31, no. 4, p. 587-591, Dec. 2005
