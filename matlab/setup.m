@@ -1,7 +1,7 @@
 % setup.m -- Sets up the use of the superADMM solver
 %   Effectively, it just adds the path to the default paths :)
 %   
-%   see also: superADMM, getDefaultSettings
+%   see also: superADMM, getSuperADMMopts
 
 % (c) Peter Verheijen, 2025
 
