@@ -71,7 +71,7 @@
 %    ** If the problem is infeasible, the outputs x and y will be the
 %    certificate of infeasibility.
 %    
-%    see also: getDefaultSettings
+%    see also: getSuperADMMopts
 
 % (c) Peter Verheijen, 2025
 
