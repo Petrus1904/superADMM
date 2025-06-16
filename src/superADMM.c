@@ -299,7 +299,7 @@ Effective if Rup is only nonzero in a few entries.
 ADMMint LDL_rankn_solve(csldl* S,           /* The LDL data package */
                         ADMMfloat *b,       /* the rhs vector, i.e. (LDLT)xout = b*/
                         ADMMfloat *xout,    /* the solution vector, i.e. (LDLT)xout = b*/
-                        ADMMfloat *Rup,     /* input, zero on output. A vector containing all is nonzero for all R updates */
+                        ADMMfloat *Rup,     /* input, zero on output. A vector containing the R-updates */
                         ADMMfloat *Rtmp,    /* Workspace vector. must be zero on input, zero on output */
                         ADMMint nDual,      /* the length of Rup, Rtmp */
                         ADMMint nPrim       /* nDual + nPrim is the length of b and all stuff in S */
