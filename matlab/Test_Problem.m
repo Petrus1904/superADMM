@@ -14,10 +14,10 @@ u = [beq; 10*ones(5,1)];
 xt = [3.4; 3.6; 2.8; 0; 0.2];
 yt = [0; 0; 8.4; 3.6; 0; 0; 0; -2; 0];
 
-% use opts = getDefaultSettings() to obtain a list of the default settings. However
+% use opts = getSuperADMMopts() to obtain a list of the default settings. However
 % this is completely optional. superADMM() can also take a struct with only the options
 % you want changed. Do note that the names of the options have to match exactly.
-%opts = getDefaultSettings();
+%opts = getSuperADMMopts();
 opts.verbose = 1; %turn on iterative display
 
 % test dense
