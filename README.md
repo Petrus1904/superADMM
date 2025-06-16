@@ -32,4 +32,15 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 - Add this folder to the default paths in MATLAB
 - Enjoy your fast solver in MATLAB with `superADMM.m`
 # How to Cite
-include bibtex
+P.C.N. Verheijen, D. Goswami and M. Lazar, "SuperADMM: Solving Quadratic Programs Faster with Dynamic Weighting ADMM," 2025, [Online]:: *https://arxiv.org/abs/2506.11608*
+```
+@misc{superADMM:Verheijen2025,
+      title={{SuperADMM: Solving Quadratic Programs Faster with Dynamic Weighting ADMM}}, 
+      author={P. C. N. Verheijen and D. Goswami and M. Lazar},
+      year={2025},
+      eprint={2506.11608},
+      archivePrefix={arXiv},
+      primaryClass={math.OC},
+      url={https://arxiv.org/abs/2506.11608}, 
+}
+```
