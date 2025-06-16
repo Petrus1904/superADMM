@@ -21,15 +21,14 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 ## MATLAB (Express installation)
 - Download the latest release (https://github.com/Petrus1904/superADMM/releases)
 - Unzip the contents in some folder
-- Add this folder to the default paths in MATLAB
+- run `setup.m`
 - Enjoy your fast solver in MATLAB with `superADMM.m`
 
 ## MATLAB (Manual installation)
 - Download or clone this package
 - Ensure that MATLAB `mex` add-on (code-generation) is installed, and `gcc` (MinGW64) is installed as mex compiler
 - Verify with `mex -setup` that `MinGW64` is the default compiler
-- Run `setup.m`
-- Add this folder to the default paths in MATLAB
+- Run `compile.m`
 - Enjoy your fast solver in MATLAB with `superADMM.m`
 
 # How to Cite
