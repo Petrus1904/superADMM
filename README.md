@@ -34,9 +34,10 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 # How to Cite
 
 **APA:**
+
 P.C.N. Verheijen, D. Goswami and M. Lazar (2025). *SuperADMM: Solving Quadratic Programs Faster with Dynamic Weighting ADMM.* arXiv: 2506.11608 [math.OC]. URL: https://arxiv.org/abs/2506.11608
 
-**Bibtex**
+**Bibtex:**
 ```
 @misc{superADMM:Verheijen2025,
       title={{SuperADMM: Solving Quadratic Programs Faster with Dynamic Weighting ADMM}}, 
