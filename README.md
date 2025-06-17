@@ -56,3 +56,6 @@ The fast execution of various linear algebraic operations is provided by a set o
 - [LAPACK] E. Anderson, Z. Bai, C. Bischof, S. Blackford, J. Demmel, J. Dongarra, J. Du Croz, A. Greenbaum, S. Hammarling, A. McKenney, and D. Sorensen, *LAPACK Users' Guide,* 3rd e. Philadelphia, PA: Society for Industrial and Applied Mathematics, 1999.
 - [CSPARSE] T.A. Davis, *Direct Methods for Sparse Linear Systems.* SIAM, 2006
 - [LDL] T.A. Davis, *Algorithm 849: A concise sparse cholesky factorization package,* ACM Trans. Math. Softw. vol. 31, no. 4, p. 587-591, Dec. 2005
+
+# License
+```superADMM``` is licensed under LGPL 3.0.
