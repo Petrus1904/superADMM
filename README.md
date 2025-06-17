@@ -58,4 +58,4 @@ The fast execution of various linear algebraic operations is provided by a set o
 - [LDL] T.A. Davis, *Algorithm 849: A concise sparse cholesky factorization package,* ACM Trans. Math. Softw. vol. 31, no. 4, p. 587-591, Dec. 2005
 
 # License
-```superADMM``` is licensed under LGPL 3.0.
+SuperADMM is licensed under LGPL 3.0.
