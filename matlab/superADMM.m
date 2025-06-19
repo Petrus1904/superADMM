@@ -56,7 +56,7 @@
 %                    reporting the status. Default 10.
 %     timeLimit   -- solver time limit, set to <= 0 for unlimited, default 0
 %   
-%    one can create a struct manually, or use getDefaultSettings() to
+%    one can create a struct manually, or use getSuperADMMopts() to
 %    obtain a full struct with the default settings.
 %
 %    If both P and A are in a sparse format, a sparse solver is used, which 
