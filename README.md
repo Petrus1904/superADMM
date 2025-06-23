@@ -1,4 +1,4 @@
-# SuperADMM
+# superADMM
 Quadratic Program Solver with dynamic weighting ADMM
 
 This algorithm specifically solves problems of shape
