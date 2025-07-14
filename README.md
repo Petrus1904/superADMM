@@ -1,5 +1,5 @@
 # SuperADMM
-Quadratic Program Solver with dynamic weighting ADMM
+Fast Quadratic Program Solver with dynamic weighting ADMM
 
 This algorithm specifically solves problems of shape
 ```
