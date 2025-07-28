@@ -1,6 +1,6 @@
 function opts = getSuperADMMopts()
 %opts = getSuperADMMopts() returns the default settings of the superADMM solver
-%   see also: superADMM
+%   see also: superADMM, setup 
 
 % (c) Peter Verheijen, 2025
 
@@ -15,5 +15,6 @@ opts.eps_abs = 1e-8;
 opts.eps_inf = 1e-8;
 opts.repInterval = 10;
 opts.timeLimit = 0;
+opts.lowRankPer = 0.05;
 
 end

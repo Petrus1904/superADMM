@@ -55,6 +55,7 @@
 %     repInterval -- (only if verbose = 1), number of iterations between
 %                    reporting the status. Default 10.
 %     timeLimit   -- solver time limit, set to <= 0 for unlimited, default 0
+%     lowRankPer  -- (0<=lowRankPer<=1) threshold for low rank updates, default 0.05
 %   
 %    one can create a struct manually, or use getSuperADMMopts() to
 %    obtain a full struct with the default settings.
