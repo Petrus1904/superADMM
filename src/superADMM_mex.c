@@ -129,7 +129,15 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
         opt = mxGetField(prhs[7], 0, "timeLimit");
         if(opt && mxIsScalar(opt)) opts.timeLimit   = mxGetScalar(opt);
         opt = mxGetField(prhs[7], 0, "lowRankPer");
-        if(opt && mxIsScalar(opt)) opts.lowRankPer  = mxGetScalar(opt);
+        if(opt && mxIsScalar(opt)){
+            opts.lowRankPer  = mxGetScalar(opt);
+        } else { //not specified
+            if(!mxIsSparse(prhs[0])){
+                //increase this value for dense matrices
+                //appears to significantly improve performance
+                opts.lowRankPer = 0.5;
+            }
+        }
     }
     //check options
     if(opts.sigma < 0) mexErrMsgIdAndTxt("superADMM:valueError", "sigma must be nonnegative");

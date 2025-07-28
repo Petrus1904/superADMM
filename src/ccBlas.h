@@ -16,6 +16,7 @@ Created by Peter Verheijen, 2025.
 #define CblasTrans 3
 #define CblasNoTrans 4
 #define CblasColMajor 5 //its always col major
+#define CblasNonUnit 6
 
 //BLAS LEVEL 1 Functions in double
 void cblas_dcopy(const ADMMint n, const double *x, const ADMMint incx, double *y, const ADMMint incy);
@@ -35,6 +36,12 @@ void cblas_dsymv(const ADMMint order, const ADMMint uplo, const ADMMint n,
 void cblas_dger(const ADMMint order, const ADMMint m, const ADMMint n, 
                 const double alpha, const double *x, const ADMMint incx,
                 const double *y, const ADMMint incy, double *A, const ADMMint lda);
+void cblas_dsyr(const ADMMint order, const ADMMint uplo, const ADMMint n, 
+                const double alpha, const double *x, const ADMMint incx,
+                double *A, const ADMMint lda);
+void cblas_dtrsv(const ADMMint order, const ADMMint uplo, const ADMMint trans, 
+                 const ADMMint diag, const ADMMint n, const double *A, const ADMMint lda, 
+                 double *x, const ADMMint incx);
 //BLAS LEVEL 3 Functions in double
 void cblas_dsyrk(const ADMMint order, const ADMMint uplo, const ADMMint trans, const ADMMint n, const ADMMint k,
                  const double alpha, const double *A, const ADMMint lda,

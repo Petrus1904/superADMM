@@ -70,6 +70,26 @@ void cblas_dsymv(const ADMMint order, const ADMMint uplo, const ADMMint n,
     ptrdiff_t pincy = (ptrdiff_t)incy;
     dsymv(&u, &pn, &alpha, A, &plda, x, &pincx, &beta, y, &pincy);                
 }
+void cblas_dtrsv(const ADMMint order, const ADMMint uplo, const ADMMint trans, 
+                 const ADMMint diag, const ADMMint n, const double *A, const ADMMint lda, 
+                 double *x, const ADMMint incx){
+    char u = 'U';
+    if(uplo == CblasLower){
+        u = 'L';
+    }
+    char t = 'N';
+    if(trans == CblasTrans){
+        t = 'T';
+    }
+    char d = 'U';
+    if(diag == CblasNonUnit){
+        d = 'N';
+    }
+    ptrdiff_t pn = (ptrdiff_t)n;
+    ptrdiff_t plda = (ptrdiff_t)lda;
+    ptrdiff_t pincx = (ptrdiff_t)incx;
+    dtrsv(&u, &t, &d, &pn, A, &plda, x, &pincx);                
+}
 void cblas_dger(const ADMMint order, const ADMMint m, const ADMMint n, 
                 const double alpha, const double *x, const ADMMint incx,
                 const double *y, const ADMMint incy, double *A, const ADMMint lda){
@@ -79,6 +99,19 @@ void cblas_dger(const ADMMint order, const ADMMint m, const ADMMint n,
     ptrdiff_t pincx = (ptrdiff_t)incx;
     ptrdiff_t pincy = (ptrdiff_t)incy;
     dger(&pm, &pn, &alpha, x, &pincx, y, &pincy, A, &plda);                
+}
+
+void cblas_dsyr(const ADMMint order, const ADMMint uplo, const ADMMint n, 
+                const double alpha, const double *x, const ADMMint incx,
+                double *A, const ADMMint lda){
+    char u = 'U';
+    if(uplo == CblasLower){
+        u = 'L';
+    }
+    ptrdiff_t pn = (ptrdiff_t)n;
+    ptrdiff_t plda = (ptrdiff_t)lda;
+    ptrdiff_t pincx = (ptrdiff_t)incx;
+    dsyr(&u, &pn, &alpha, x, &pincx, A, &plda);                
 }
 
 //BLAS LEVEL 3 Functions in double

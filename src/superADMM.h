@@ -21,11 +21,13 @@
 #ifndef USE_SINGLE_PRECISION
     #define ADMMfloat double
     #define cblas_ger cblas_dger
+    #define cblas_syr cblas_dsyr
     #define cblas_copy cblas_dcopy
     #define cblas_scal cblas_dscal
     #define cblas_syrk cblas_dsyrk
     #define cblas_gemv cblas_dgemv
     #define cblas_symv cblas_dsymv
+    #define cblas_trsv cblas_dtrsv
     #define cblas_amax cblas_damax
     #define cblas_axpy cblas_daxpy
     #define cblas_dot cblas_ddot
@@ -93,7 +95,7 @@ typedef struct ADMMopts{
 #define DEFEPSINF  1e-8
 #define DEFREPIVAL 10
 #define DEFTIMELIM 0.0
-#define DEFLRPER   0.0
+#define DEFLRPER   0.05
 
 typedef struct ADMMinfo{
     ADMMint nIter;          //number of iterations it took

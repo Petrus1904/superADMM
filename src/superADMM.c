@@ -80,17 +80,20 @@ void printVectorf(const char* str, ADMMfloat* x, ADMMint n){
 }
 
 
-void updatePARA(const ADMMfloat* A, const ADMMfloat* R, const ADMMfloat* pR, ADMMfloat* PARA, ADMMint nDual, ADMMint nPrim){
-    //This is REALLY slow
+void updatePARA(const ADMMfloat* A, const ADMMfloat* Rup, ADMMfloat* PARA, ADMMint nDual, ADMMint nPrim){
+    //Update PARA => PARA + A_i'*Rup_i*A_i, for all nonzero i in Rup.
+    //More efficient that full matrix inner product for lower number of nonzeros in Rup.
     for(ADMMint i = 0; i < nDual; i++){
-        cblas_ger(CblasColMajor, nPrim, nPrim, R[i]-pR[i], &A[i], nDual, &A[i], nDual, PARA, nPrim);
+        if(Rup[i] != 0){
+            cblas_syr(CblasColMajor, CblasLower, nPrim, Rup[i], &A[i], nDual, PARA, nPrim);
+        }
     }
 }
 
 void computePARA(const ADMMfloat* P, const ADMMfloat* A, const ADMMfloat* R, const ADMMfloat sigma, ADMMfloat* tmp, ADMMfloat* out, ADMMint nDual, ADMMint nPrim){
     //computes P+A^T*R*A -- we assume column major data --ONLY UPPER TRIANGLE
     //copy
-    char uplo = 'U';
+    char uplo = 'L';
     cblas_copy(nDual*nPrim, A, 1, tmp, 1);
     lapack_lacpy(&uplo, &nPrim, &nPrim, P, &nPrim, out, &nPrim);
     // cblas_copy(nPrim*nPrim, P, 1, out, 1);
@@ -100,13 +103,60 @@ void computePARA(const ADMMfloat* P, const ADMMfloat* A, const ADMMfloat* R, con
     }
     //cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans, nPrim, nPrim, nDual, 1.0, tmp, nDual, A, nDual, 1.0, out, nPrim);
     //Symmetric rank k update of full size is cheaper than dgemm
-    cblas_syrk(CblasColMajor, CblasUpper, CblasTrans, nPrim, nDual, 1.0, tmp, nDual, 1.0, out, nPrim);
+    cblas_syrk(CblasColMajor, CblasLower, CblasTrans, nPrim, nDual, 1.0, tmp, nDual, 1.0, out, nPrim);
     
     if(sigma > 0){ //add sigma on diagonal only if nonzero
         for(ADMMint i = 0; i < nPrim; i++){
             out[i*nPrim + i] += sigma;
         }
     }
+}
+
+int chol_lowRankUpdate(ADMMfloat* L, const ADMMfloat* A, const ADMMfloat* Rup, ADMMfloat* tmp, ADMMint nDual, ADMMint nPrim){
+    //updates cholesky decomposition A = L*L^T with set of column vectors in A and gains in Rup.
+    ADMMint i, j, k;
+    ADMMfloat r, c, s, a, lk, xk, rk, rks;
+    for(i = 0; i < nDual; i++){
+        if(Rup[i] != 0){
+            //update
+            rk = Rup[i];
+            rks = 1;
+            cblas_copy(nPrim, &A[i], nDual, tmp, 1);
+            for(k = 0; k < nPrim; k++){
+                if(tmp[k] != 0){
+                    lk = L[k*nPrim+k];
+                    xk = tmp[k];
+                    r = lk*lk + (rk/rks)*xk*xk;
+                    if(r<0){
+                        return -k-1; //not posdef
+                    }
+                    r = sqrt(r);
+                    c = r/lk;
+                    s = xk/lk;
+                    a = xk*rk/(r*rks);
+                    L[k*nPrim+k] = r;
+                    //SIMD
+                    for(j = k+1; j < nPrim-3; j+=4){
+                        tmp[j]   -= L[j+k*nPrim]*s;
+                        tmp[j+1] -= L[j+k*nPrim+1]*s;
+                        tmp[j+2] -= L[j+k*nPrim+2]*s;
+                        tmp[j+3] -= L[j+k*nPrim+3]*s;
+                        L[j+k*nPrim]   = c*L[j+k*nPrim]   + a*tmp[j];
+                        L[j+k*nPrim+1] = c*L[j+k*nPrim+1] + a*tmp[j+1];
+                        L[j+k*nPrim+2] = c*L[j+k*nPrim+2] + a*tmp[j+2];
+                        L[j+k*nPrim+3] = c*L[j+k*nPrim+3] + a*tmp[j+3];
+                        
+                    }
+                    for(; j < nPrim; j++){
+                        tmp[j] -= L[j+k*nPrim]*s;
+                        L[j+k*nPrim] = c*L[j+k*nPrim] + a*tmp[j];
+                    }
+                    rks = rks + rk*(xk*xk)/(lk*lk);
+                }
+            }
+        }
+    }
+    return 0;
 }
 
 cs* cs_copy(const cs* A){
@@ -299,7 +349,7 @@ Effective if Rup is only nonzero in a few entries.
 ADMMint LDL_rankn_solve(csldl* S,           /* The LDL data package */
                         ADMMfloat *b,       /* the rhs vector, i.e. (LDLT)xout = b*/
                         ADMMfloat *xout,    /* the solution vector, i.e. (LDLT)xout = b*/
-                        ADMMfloat *Rup,     /* input, zero on output. A vector containing the R-updates */
+                        ADMMfloat *Rup,     /* input, zero on output. A vector containing all is nonzero for all R updates */
                         ADMMfloat *Rtmp,    /* Workspace vector. must be zero on input, zero on output */
                         ADMMint nDual,      /* the length of Rup, Rtmp */
                         ADMMint nPrim       /* nDual + nPrim is the length of b and all stuff in S */
@@ -425,58 +475,83 @@ ADMMint LDLsolve(const cs* A, ADMMfloat *b, ADMMfloat *xout, csldl* S){
 
 }
 
-cs* assemblePARA_cs(const cs* P, const cs* A, const cs* AT, const ADMMfloat* R, const ADMMfloat sigma, ADMMint nDual, ADMMint nPrim){
+cs* assemblePARA_cs(const cs* P, const cs* A, const ADMMfloat* R, const ADMMfloat sigma, ADMMint nDual, ADMMint nPrim){
     //constructs PARA = [P+sigma*I, A'; A, -1/R]
     cs* PARA = cs_spalloc(nDual+nPrim, nDual+nPrim, P->nzmax+2*A->nzmax+nDual+nPrim, 1, 0);
     ADMMint k = 0;
+    ADMMint i,j,r;
+    ADMMfloat *PAx = PARA->x;
+    ADMMint *PAp = PARA->p;
+    ADMMint *PAi = PARA->i;
     PARA->p[0] = 0;
-    for(ADMMint i = 0; i < nPrim; i++){
+    for(i = 0; i < nPrim; i++){
         //iterate per column
         ADMMint hasDiag = 0;
-        for(ADMMint j = P->p[i]; j < P->p[i+1]; j++){
+        for(j = P->p[i]; j < P->p[i+1]; j++){
             if(P->i[j] > i && hasDiag == 0){
                 //col P_i zero on diagonal, include sigma
-                PARA->x[k] = sigma;
-                PARA->i[k] = i;
+                PAx[k] = sigma;
+                PAi[k] = i;
                 k++;
                 hasDiag = 1;
             }
-            PARA->x[k] = P->x[j];
-            PARA->i[k] = P->i[j];
+            PAx[k] = P->x[j];
+            PAi[k] = P->i[j];
             if(P->i[j] == i){
-                PARA->x[k] +=sigma;
+                PAx[k] +=sigma;
                 hasDiag = 1;
             }
             k++;
         }
         if(hasDiag == 0){
             //col P_i was strict upper triangular
-            PARA->x[k] = sigma;
-            PARA->i[k] = i;
+            PAx[k] = sigma;
+            PAi[k] = i;
             k++;
             hasDiag = 1;
         }
-        for(ADMMint j = A->p[i]; j < A->p[i+1]; j++){
-            PARA->x[k] = A->x[j];
-            PARA->i[k] = A->i[j] + nPrim;
+        for(j = A->p[i]; j < A->p[i+1]; j++){
+            PAx[k] = A->x[j];
+            PAi[k] = A->i[j] + nPrim;
             k++;
         }
-        PARA->p[i+1] = k;
+        PAp[i+1] = k;
     }
-    for(ADMMint i = 0; i < nDual; i++){
-        //iterate per column
-        for(ADMMint j = AT->p[i]; j < AT->p[i+1]; j++){
-            PARA->x[k] = AT->x[j];
-            PARA->i[k] = AT->i[j];
-            k++;
+    ADMMint *PARAnz = cs_calloc(nDual, sizeof(ADMMint)); //calloc because it must be zero
+    for(i = 0; i < A->nzmax; i++){
+        PARAnz[A->i[i]]++; //count nonzeros per row
+    }
+    for(i = 0; i < nDual; i++){
+        //cumsum
+        r = PAp[nPrim+i]+PARAnz[i];
+        PAp[nPrim+i+1] = r+1; //+1 because of the R entry
+        PAx[r] = -1/R[i]; //fill in R value
+        PAi[r] = nPrim + i;
+        PARAnz[i] = 0; //reset counter
+    }
+    for(i = 0; i < nPrim; i++){
+        for(j = A->p[i]; j < A->p[i+1]; j++){
+            r = PAp[nPrim+A->i[j]]+PARAnz[A->i[j]];
+            PAx[r] = A->x[j];
+            PAi[r] = i;
+            PARAnz[A->i[j]]++;
         }
-        PARA->x[k] = -1/R[i];
-        PARA->i[k] = nPrim + i; //diagonal
-        k++;
-        PARA->p[nPrim+i+1] = k;
     }
+    // for(i = 0; i < nDual; i++){
+    //     //iterate per column
+    //     for(ADMMint j = AT->p[i]; j < AT->p[i+1]; j++){
+    //         PARA->x[k] = AT->x[j];
+    //         PARA->i[k] = AT->i[j];
+    //         k++;
+    //     }
+    //     PARA->x[k] = -1/R[i];
+    //     PARA->i[k] = nPrim + i; //diagonal
+    //     k++;
+    //     PARA->p[nPrim+i+1] = k;
+    // }
     //cs_sprealloc allocates PARA->p with the wrong size...
-    PARA->nzmax = k;
+    cs_free(PARAnz);
+    PARA->nzmax = PAp[nPrim+nDual];
     return PARA;
 }
 
@@ -489,10 +564,25 @@ void printTime(struct timespec* start){
     clock_gettime(CLOCK_MONOTONIC, start);
 }
 
-BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, const ADMMfloat* A, const ADMMfloat* l, const ADMMfloat* u,
-                                      ADMMfloat* x, ADMMfloat* y, ADMMint nPrim, ADMMint nDual, ADMMopts opts, ADMMinfo* info){
+/* superADMMsolverDense solves quadratic program 
+   min_x 0.5x'*P*x + x'*q
+   s.t. l<=A*x<=u 
+   Considering Dense matrices P and A.
+*/
+BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) quadratic cost function matrix*/
+                                      const ADMMfloat* q, /* (nPrim) cost function vector */
+                                      const ADMMfloat* A, /* (nDual x nPrim) Constraint matrix */
+                                      const ADMMfloat* l, /* (nDual) lower bounds vector */
+                                      const ADMMfloat* u, /* (nDual) upper bounds vector */
+                                      ADMMfloat* x,       /* (nPrim) initial solution guess on input, primal solution on output */
+                                      ADMMfloat* y,       /* (nDual) initial dual guess on input, dual solution on output */
+                                      ADMMint nPrim,      /* the primal size (i.e., size of cost function) */
+                                      ADMMint nDual,      /* the dual size (i.e., size of constraints) */
+                                      ADMMopts opts,      /* input struct with solver settings */
+                                      ADMMinfo* info      /* output struct with solver information */
+                                      ){
 
-    //superADMMsolverDense solves a dense QP problem using the superADMM method (name pending)
+    //superADMMsolverDense solves a dense QP problem using the superADMM method
     //returns the exitflag, with meaning:
     //  1: OK
     //  2: requested tolerance not achievable (almost OK)
@@ -545,12 +635,14 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
     tmp_z = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
     ADMMfloat* xp; //previous x.
     xp = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
+    ADMMfloat* Rup;
+    Rup = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
     //TODO: include prescaling (superADMM often doesnt need it anyway)
 
     //stuff used for LAPACK FORTRAN calls
     ADMMint one = 1;
     char uplo = 'A'; //all elements
-    char uplopos = 'U';
+    char uplopos = 'L';
     ADMMfloat zero = 0.0;
     ADMMint LSinfo;
     ADMMint nrhs = 1;
@@ -562,6 +654,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
     ADMMfloat bound = opts.RBound;
     ADMMfloat rPrim = 2*opts.eps_abs;
     ADMMfloat rDual = 2*opts.eps_abs;
+    ADMMint Rupdates = 2*nDual;
 
     //set R and Z
     vec_dset(nDual, opts.rho_0, R);
@@ -572,6 +665,9 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
     computePARA(P, A, R, opts.sigma, tmpA, PARA, nDual, nPrim);
 
     if(opts.verbose == 2){
+        ADMMint probSize = (nPrim*nPrim + nDual*nPrim + 2*nPrim + 3*nDual)*sizeof(ADMMfloat);
+        ADMMint workSize = (5*nDual + 3*nPrim + 2*nPrim*nPrim + nDual*nPrim)*sizeof(ADMMfloat);
+        print("Problem size in memory: %d (KB)\nSolver workspace memory: %d (KB) \n", probSize/1000, workSize/1000);
         print("Initialization:  ");
         printTime(&tstart);
     }
@@ -594,12 +690,21 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
         //copy for precision check
         if((nIter+1) % infeasInterval == 0) cblas_copy(nPrim, x, 1, xp, 1); //copy instead
         cblas_copy(nPrim, tmp_q, 1, x, 1);
-        lapack_lacpy(&uplopos, &nPrim, &nPrim, PARA, &nPrim, tmpP, &nPrim); //copy upper triangular part of PARA for condition check
+        
 
         //x^k+1 = solve using LAPACK -- I use the direct FORTRAN call here since this works with large matrices
         // Since PARA is posdef by definition, we use the dposv function. This uses Cholesky decomposition and more importantly, 
         // only considers the upper triangular part of PARA. Conversevely, we also only compute that part to save more time :).
-        lapack_posv(&uplopos, &nPrim, &nrhs, tmpP, &nPrim, x, &nPrim, &LSinfo);
+        // if(Rupdates < opts.lowRankPer*nDual){ //low rank cholesky is slower than plain cholesky... practically regardless of the amount
+        //     //tmpP is the cholesky decomp.
+        //     LSinfo = chol_lowRankUpdate(tmpP, A, Rup, tmp_x, nDual, nPrim);
+        //     cblas_trsv(CblasColMajor, CblasLower, CblasNoTrans, CblasNonUnit, nPrim, tmpP, nPrim, x, 1);
+        //     cblas_trsv(CblasColMajor, CblasLower, CblasTrans, CblasNonUnit, nPrim, tmpP, nPrim, x, 1);
+        // } else {
+            lapack_lacpy(&uplopos, &nPrim, &nPrim, PARA, &nPrim, tmpP, &nPrim); //copy upper triangular part of PARA for condition check
+            lapack_posv(&uplopos, &nPrim, &nrhs, tmpP, &nPrim, x, &nPrim, &LSinfo);
+        // }
+        
         
         if(LSinfo != 0){ //matrix is not positive definite. Either singular or contains negative eigenvalues (non-convex)
             if(opts.verbose == 1) print("Cholesky failed with info: %d exiting solver\n", LSinfo);
@@ -626,7 +731,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
 
         //do Condition check before convergence -- allows me to re-use temps
         //tmpq = PARA*x-tmpq
-        cblas_symv(CblasColMajor, CblasUpper, nPrim, 1.0, PARA, nPrim, x, 1, -1.0, tmp_q, 1);
+        cblas_symv(CblasColMajor, CblasLower, nPrim, 1.0, PARA, nPrim, x, 1, -1.0, tmp_q, 1);
         cond = cblas_amax(nPrim, tmp_q, 1);
 
         //check convergence
@@ -721,15 +826,54 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
         timeLoop4 += dTime(&tLoopTask);
         clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
         //update R
+        Rupdates = 0;
         if(cond - rPrim > -1e-2*cond || cond - rDual > -1e-2*cond){
             bound *= opts.tau;
+            Rupdates = nDual;
             if(bound < 1){
                 eflag = 2;
                 break;
             }
         }
+        
+        
+
+        ADMMfloat Rt;
+        for(ADMMint i = 0; i < nDual; i++){
+            Rup[i] = 0;
+            Rt = R[i];
+            if(z[i] == u[i] || z[i] == l[i]){
+                
+                if(R[i] < bound){
+                    R[i] = min(bound, R[i]*opts.alpha);
+                    Rupdates++;
+                    Rup[i] = (R[i]) - (Rt);
+                } else {
+                    R[i] = bound;
+                }
+                
+                // R[i] = min(bound, R[i]*opts.alpha);
+            } else {
+                if(R[i] > 1/bound){
+                    R[i] = max(1/bound, R[i]/opts.alpha); 
+                    Rupdates++;
+                    Rup[i] = (R[i]) - (Rt);
+                } else {
+                    R[i] = 1/bound;
+                }
+                
+                // R[i] = max(1/bound, R[i]/opts.alpha); 
+            }
+            // Rup[i] = (R[i]) - (Rt);
+        }
+        if(Rupdates < opts.lowRankPer*nDual){
+            updatePARA(A, Rup, PARA, nDual, nPrim);
+        } else {
+            computePARA(P, A, R, opts.sigma, tmpA, PARA, nDual, nPrim);
+        }
+
         if(opts.verbose == 1 && nIter % opts.repInterval == 0){
-            print("|  %3d | %.3e | %.3e | %.3e | %.3e |\n", nIter, rPrim, rDual, cond, bound);
+            print("|  %3d | %.3e | %.3e | %.3e | %.3e | %d\n", nIter, rPrim, rDual, cond, bound, Rupdates);
             repHeadercnt++;
             if(repHeadercnt >= 25){
                 print("| Iter | rPrim     | rDual     | rCond     | Bound     | MESSAGE \n");
@@ -737,15 +881,6 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
             }
         }
         
-
-        for(ADMMint i = 0; i < nDual; i++){
-            if(z[i] == u[i] || z[i] == l[i]){
-                R[i] = min(bound, R[i]*opts.alpha);
-            } else {
-                R[i] = max(1/bound, R[i]/opts.alpha);
-            }
-        }
-        computePARA(P, A, R, opts.sigma, tmpA, PARA, nDual, nPrim);
         timeLoop5 += dTime(&tLoopTask);
 
     }
@@ -814,6 +949,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
     free(tmp_y);
     free(tmp_z);
     free(xp);
+    free(Rup);
 
     info->runtime = dTime(&ttotal);
     info->nIter = nIter;
@@ -829,11 +965,31 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, co
     return eflag;
 }
 
-BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMint *Pcolidx, const ADMMint Pnnz, const ADMMfloat* q, 
-                                       ADMMfloat* Adata, ADMMint *Arowptr, ADMMint *Acolidx, const ADMMint Annz, const ADMMfloat* l, const ADMMfloat* u,
-                                       ADMMfloat* x, ADMMfloat* y, ADMMint nPrim, ADMMint nDual, ADMMopts opts, ADMMinfo* info){
 
-    //superADMMsolverSparse solves a sparse QP problem using the superADMM method (name pending)
+/* superADMMsolverSparse solves quadratic program 
+   min_x 0.5x'*P*x + x'*q
+   s.t. l<=A*x<=u 
+   Considering Sparse (CSC) matrices P and A.
+*/
+BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero values in P */
+                                       ADMMint *Pcolptr,    /* (nPrim+1) column pointers of P */
+                                       ADMMint *Prowidx,    /* (Pnnz) row indices of P */
+                                       const ADMMint Pnnz,  /* number of nonzeros in P */
+                                       const ADMMfloat* q,  /* (nPrim) quadratic cost function vector */
+                                       ADMMfloat* Adata,    /* (Annz) non-zero values in A */
+                                       ADMMint *Acolptr,    /* (nPrim+1) colum pointers of A */
+                                       ADMMint *Arowidx,    /* (Annz) row indices of A */
+                                       const ADMMint Annz,  /* number of nonzeros in A */
+                                       const ADMMfloat* l,  /* (nDual) vector of lower bounds */
+                                       const ADMMfloat* u,  /* (nDual) vector of upper bounds */
+                                       ADMMfloat* x,        /* (nPrim) initial primal guess on input, primal solution on output */
+                                       ADMMfloat* y,        /* (nDual) initial dual guess on input, dual solution on output */
+                                       ADMMint nPrim,       /* number of primal variables (i.e., size of cost function)*/
+                                       ADMMint nDual,       /* number of dual variables (i.e., size of constraints) */
+                                       ADMMopts opts,       /* input struct with solver settings */
+                                       ADMMinfo* info       /* output struct with solver information */
+                                    ){
+    //superADMMsolverSparse solves a sparse QP problem using the superADMM method
     //returns the exitflag, with meaning:
     //  1: OK
     //  2: requested tolerance not achievable (almost OK)
@@ -856,8 +1012,8 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
         print("+------+-----------+-----------+-----------+-----------+---------\n");
     }
 
-    const cs P = {Pnnz, nPrim, nPrim, Prowptr, Pcolidx, Pdata, -1}; //-1 for CSC format
-    const cs A = {Annz, nDual, nPrim, Arowptr, Acolidx, Adata, -1}; //-1 for CSC format
+    const cs P = {Pnnz, nPrim, nPrim, Pcolptr, Prowidx, Pdata, -1}; //-1 for CSC format
+    const cs A = {Annz, nDual, nPrim, Acolptr, Arowidx, Adata, -1}; //-1 for CSC format
 
     //Timing stuff -- remove before release
     struct timespec tstart, ttotal, tLoopTask;
@@ -866,35 +1022,24 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
     clock_gettime(CLOCK_MONOTONIC, &tstart);
     clock_gettime(CLOCK_MONOTONIC, &ttotal);
 
-    cs *AT = cs_transpose(&A, 1);
-
     const ADMMint infeasInterval = 10;
     //Allocate R
-    ADMMfloat* R;
-    R = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
-    ADMMfloat* Rup;
-    Rup = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
-    ADMMfloat* Rtmp;
-    Rtmp = (ADMMfloat*) malloc((nPrim+nDual) * sizeof(ADMMfloat));
-    ADMMfloat* z;
-    z = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
+    ADMMfloat* R      = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
+    ADMMfloat* Rup    = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
+    ADMMfloat* Rtmp   = (ADMMfloat*) malloc((nPrim+nDual) * sizeof(ADMMfloat));
+    ADMMfloat* z      = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
+
+    ADMMfloat* tmp_q  = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
+    ADMMfloat* rhs    = (ADMMfloat*) malloc((nPrim + nDual)* sizeof(ADMMfloat));
+    ADMMfloat* sol    = (ADMMfloat*) malloc((nPrim + nDual)* sizeof(ADMMfloat));
+    ADMMfloat* tmp_x  = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
+    ADMMfloat* tmp_y  = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
+    ADMMfloat* xp     = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
+    ADMMfloat *tmp_yy = (ADMMfloat*) malloc(nDual*sizeof(ADMMfloat));
+
     //Allocate all intermediate helper matrices
     cs* PARA;
     csldl* S = NULL;
-
-    ADMMfloat* tmp_q; //temporary vector of size q
-    tmp_q = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
-    ADMMfloat* rhs; //temporary vector of size q
-    rhs = (ADMMfloat*) malloc((nPrim + nDual)* sizeof(ADMMfloat));
-    ADMMfloat* sol;
-    sol = (ADMMfloat*) malloc((nPrim + nDual)* sizeof(ADMMfloat));
-    ADMMfloat* tmp_x; //temporary vector of size x
-    tmp_x = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
-    ADMMfloat* tmp_y; //temporary vector of size y
-    tmp_y = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
-    ADMMfloat* xp; //previous x.
-    xp = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
-    ADMMfloat *tmp_yy = (ADMMfloat*) malloc(nDual*sizeof(ADMMfloat));
 
     //TODO: include prescaling (superADMM often doesnt need it anyway)
 
@@ -921,7 +1066,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
     cs_gaxpy(&A, x, z);
     
     //PARA = [P+sigmaI, A'; A, -R^{-1}];
-    PARA = assemblePARA_cs(&P, &A, AT, R, opts.sigma, nDual, nPrim);
+    PARA = assemblePARA_cs(&P, &A, R, opts.sigma, nDual, nPrim);
     
     S = LDL_symb(PARA, 0);
     if(!S){
@@ -929,6 +1074,11 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
     }
 
     if(opts.verbose == 2){
+        if(S){
+            ADMMint probSize = (Pnnz + 2*nPrim + Annz + 3*nDual)*sizeof(ADMMfloat) + (Annz + Pnnz + 2*nPrim + 2)*sizeof(ADMMint);
+            ADMMint workSize = (5*nDual + 3*nPrim + 3*(nPrim+nDual)+ S->nnz+2*nKKT+ PARA->nzmax)*sizeof(ADMMfloat) + (8*nKKT+2+ S->nnz+PARA->nzmax)*sizeof(ADMMint);
+            print("Problem size in memory: %d (KB)\nSolver workspace memory: %d (KB) \n", probSize/1000, workSize/1000);
+        }
         print("Initialization:  ");
         printTime(&tstart);
     }
@@ -1028,7 +1178,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
         //dual convergence P*x + q + A'y;
         cblas_copy(nPrim, q, 1, tmp_q, 1); //tmpq = q
         cs_syaxpy(&P, x, tmp_q); //tmpq = q + P*x
-        cs_gaxpy(AT, y, tmp_q); //tmpq = q + P*x + AT*y
+        cs_gatxpy(&A, y, tmp_q); //tmpq = q + P*x + AT*y
         rDual = cblas_amax(nPrim, tmp_q, 1);
 
         if(rPrim < opts.eps_abs && rDual < opts.eps_abs){ //no relative check yet
@@ -1067,7 +1217,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
 
             ADMMfloat dy_inf = cblas_amax(nDual, tmp_y, 1);
             vec_dset(nPrim, 0.0, tmp_q);
-            cs_gaxpy(AT, tmp_y, tmp_q); //tmp_q = A'*dy
+            cs_gatxpy(&A, tmp_y, tmp_q); //tmp_q = A'*dy
             if(cblas_amax(nPrim, tmp_q, 1) < opts.eps_inf*dy_inf){ 
                 ADMMfloat primInfeas = 0;
                 for(ADMMint i = 0; i < nDual; i++){
@@ -1155,7 +1305,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
                 Rup[i] = 0;
                 Rt = R[i];
                 if(z[i] == u[i] || z[i] == l[i]){
-                    
                     if(R[i] < bound){
                         R[i] = min(bound, R[i]*opts.alpha);
                         Rupdates++;
@@ -1163,8 +1312,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
                     } else {
                         R[i] = bound;
                     }
-                    
-                    // R[i] = min(bound, R[i]*opts.alpha);
                 } else {
                     if(R[i] > 1/bound){
                         R[i] = max(1/bound, R[i]/opts.alpha); 
@@ -1173,8 +1320,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
                     } else {
                         R[i] = 1/bound;
                     }
-                    
-                    // R[i] = max(1/bound, R[i]/opts.alpha); 
                 }
                 idx = PARA->p[nPrim+i+1]-1; //R[i] is always the last column index
                 PARA->x[idx] = -1/R[i];
@@ -1203,8 +1348,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
     cs_syaxpy(&P, x, tmp_x);
     objVal = 0.5*cblas_dot(nPrim, tmp_x, 1, x, 1); //0.5*x^T*P*x
     objVal += cblas_dot(nPrim, x, 1, q, 1);
-    
-    //free because it currently contains "unsolved"
     
     switch(eflag){
         case 0:
@@ -1252,7 +1395,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMi
     free(Rup);
     free(Rtmp);
     cs_spfree(PARA);
-    cs_spfree(AT);
     cs_ldlfree(S);
     free(z);
     free(tmp_x);
