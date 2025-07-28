@@ -91,13 +91,15 @@ def getOptimOpts():
          (only if verbose = 1), number of iterations between reporting the status. Default 10.
      - timeLimit (float): 
          Time limit in seconds, use timeLimit <= 0 for unlimited, default 0.
+     - lowRankPer (float);
+         Threshold for low rank updates, 0<=lowRankPer<=1, default 0.05.
     '''
     
     options = ADMMopts(verbose=0,    maxIter=500,
                        sigma=1e-6,   rho_0=1.0,
                        tau=0.5,      alpha=500,
                        RBound=1e8,   eps_abs=1e-8,
-                       eps_inf=1e-8, repInterval=10, timeLimit=0, lowRankPer=0.0)
+                       eps_inf=1e-8, repInterval=10, timeLimit=0, lowRankPer=0.05)
     return options
 
 def superADMM(P, q, A, l, u, x0 = None, y0 = None, ADMMoptions = None):
