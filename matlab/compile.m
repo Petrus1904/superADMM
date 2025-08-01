@@ -4,7 +4,7 @@
 
 % (c) Peter Verheijen, 2025
 
-mex -R2018a superADMM_mex.c superADMM.c csparse.c ldl.c ccBlas.c -output superADMM -lmwblas -lmwlapack -DMATLAB_COMP
+mex -R2018a ..\src\superADMM_mex.c ..\src\superADMM.c ..\src\csparse.c ..\src\ldl.c ..\src\ccBlas.c -output superADMM -lmwblas -lmwlapack -DMATLAB_COMP
 
 thisFile = mfilename('fullpath');
 thisFolder = fileparts(thisFile);

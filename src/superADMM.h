@@ -124,10 +124,10 @@ typedef struct csLDL{
 } csldl;
 
 BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, const ADMMfloat* q, const ADMMfloat* A, const ADMMfloat* l, const ADMMfloat* u,
-                                 ADMMfloat* x, ADMMfloat* y, ADMMint nPrim, ADMMint nDual, ADMMopts opts, ADMMinfo* info);
+                                        ADMMfloat* x, ADMMfloat* y, ADMMint nPrim, ADMMint nDual, ADMMopts opts, ADMMinfo* info);
 
-BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMint *Pcolidx, const ADMMint Pnnz, const ADMMfloat* q, 
-                          ADMMfloat* Adata, ADMMint *Arowptr, ADMMint *Acolidx, const ADMMint Annz, const ADMMfloat* l, const ADMMfloat* u,
-                          ADMMfloat* x, ADMMfloat* y, ADMMint nPrim, ADMMint nDual, ADMMopts opts, ADMMinfo* info);
+BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMint *Pcolidx, const ADMMfloat* q, 
+                                        ADMMfloat* Adata, ADMMint *Arowptr, ADMMint *Acolidx, const ADMMfloat* l, const ADMMfloat* u,
+                                        ADMMfloat* x, ADMMfloat* y, ADMMint nPrim, ADMMint nDual, ADMMopts opts, ADMMinfo* info);
 
 #endif

@@ -518,7 +518,7 @@ cs* assemblePARA_cs(const cs* P, const cs* A, const ADMMfloat* R, const ADMMfloa
         PAp[i+1] = k;
     }
     ADMMint *PARAnz = cs_calloc(nDual, sizeof(ADMMint)); //calloc because it must be zero
-    for(i = 0; i < A->nzmax; i++){
+    for(i = 0; i < A->p[nPrim]; i++){
         PARAnz[A->i[i]]++; //count nonzeros per row
     }
     for(i = 0; i < nDual; i++){
@@ -974,12 +974,10 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
 BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero values in P */
                                        ADMMint *Pcolptr,    /* (nPrim+1) column pointers of P */
                                        ADMMint *Prowidx,    /* (Pnnz) row indices of P */
-                                       const ADMMint Pnnz,  /* number of nonzeros in P */
                                        const ADMMfloat* q,  /* (nPrim) quadratic cost function vector */
                                        ADMMfloat* Adata,    /* (Annz) non-zero values in A */
                                        ADMMint *Acolptr,    /* (nPrim+1) colum pointers of A */
                                        ADMMint *Arowidx,    /* (Annz) row indices of A */
-                                       const ADMMint Annz,  /* number of nonzeros in A */
                                        const ADMMfloat* l,  /* (nDual) vector of lower bounds */
                                        const ADMMfloat* u,  /* (nDual) vector of upper bounds */
                                        ADMMfloat* x,        /* (nPrim) initial primal guess on input, primal solution on output */
@@ -1012,8 +1010,8 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         print("+------+-----------+-----------+-----------+-----------+---------\n");
     }
 
-    const cs P = {Pnnz, nPrim, nPrim, Pcolptr, Prowidx, Pdata, -1}; //-1 for CSC format
-    const cs A = {Annz, nDual, nPrim, Acolptr, Arowidx, Adata, -1}; //-1 for CSC format
+    const cs P = {Pcolptr[nPrim], nPrim, nPrim, Pcolptr, Prowidx, Pdata, -1}; //-1 for CSC format
+    const cs A = {Acolptr[nPrim], nDual, nPrim, Acolptr, Arowidx, Adata, -1}; //-1 for CSC format
 
     //Timing stuff -- remove before release
     struct timespec tstart, ttotal, tLoopTask;
@@ -1067,7 +1065,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     
     //PARA = [P+sigmaI, A'; A, -R^{-1}];
     PARA = assemblePARA_cs(&P, &A, R, opts.sigma, nDual, nPrim);
-    
     S = LDL_symb(PARA, 0);
     if(!S){
         print("symbolic failed\n");
@@ -1075,7 +1072,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
 
     if(opts.verbose == 2){
         if(S){
-            ADMMint probSize = (Pnnz + 2*nPrim + Annz + 3*nDual)*sizeof(ADMMfloat) + (Annz + Pnnz + 2*nPrim + 2)*sizeof(ADMMint);
+            ADMMint probSize = (P.nzmax + 2*nPrim + A.nzmax + 3*nDual)*sizeof(ADMMfloat) + (A.nzmax + P.nzmax + 2*nPrim + 2)*sizeof(ADMMint);
             ADMMint workSize = (5*nDual + 3*nPrim + 3*(nPrim+nDual)+ S->nnz+2*nKKT+ PARA->nzmax)*sizeof(ADMMfloat) + (8*nKKT+2+ S->nnz+PARA->nzmax)*sizeof(ADMMint);
             print("Problem size in memory: %d (KB)\nSolver workspace memory: %d (KB) \n", probSize/1000, workSize/1000);
         }

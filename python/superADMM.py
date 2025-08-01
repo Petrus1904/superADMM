@@ -49,12 +49,10 @@ lib.superADMMsolverDense.restype = ctypes.c_int32
 lib.superADMMsolverSparse.argtypes=[ctypes.POINTER(ctypes.c_double), #Pdata
                                     ctypes.POINTER(ctypes.c_int32), #Pcol
                                     ctypes.POINTER(ctypes.c_int32), #Pidx
-                                    ctypes.c_int32, #Pnnz
                                     ctypes.POINTER(ctypes.c_double), #q
                                     ctypes.POINTER(ctypes.c_double), #Adata
                                     ctypes.POINTER(ctypes.c_int32), #Acol
                                     ctypes.POINTER(ctypes.c_int32), #Aidx
-                                    ctypes.c_int32, #Annz
                                     ctypes.POINTER(ctypes.c_double), #l
                                     ctypes.POINTER(ctypes.c_double), #u
                                     ctypes.POINTER(ctypes.c_double), #x
@@ -220,13 +218,11 @@ def superADMM(P, q, A, l, u, x0 = None, y0 = None, ADMMoptions = None):
         Ptdata = P.data.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         Ptcol = P.indptr.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         Ptind = P.indices.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
-        Ptnnz = P.nnz
         Atdata = A.data.ctypes.data_as(ctypes.POINTER(ctypes.c_double))
         Atcol = A.indptr.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         Atind = A.indices.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
-        Atnnz = A.nnz
-        eflag = lib.superADMMsolverSparse(Ptdata, Ptcol, Ptind, Ptnnz, qt,
-                                         Atdata, Atcol, Atind, Atnnz, lt,
+        eflag = lib.superADMMsolverSparse(Ptdata, Ptcol, Ptind, qt,
+                                         Atdata, Atcol, Atind, lt,
                                          ut, xt, yt, nPrim, nDual, ADMMoptions, infopt)
     else:
         raise Exception("Both P and A must be either dense or sparse CSC matrices")

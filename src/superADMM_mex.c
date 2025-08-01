@@ -226,18 +226,16 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 
         //extract P
         ADMMfloat *Px = (ADMMfloat*)mxGetDoubles(prhs[0]);
-        const ADMMint Pnnz = (ADMMint)mxGetNzmax(prhs[0]);
         //We always cast -- even if the types are equal
-        ADMMint *Pi = mwIndextoInt(mxGetIr(prhs[0]), Pnnz);
         ADMMint *Pp = mwIndextoInt(mxGetJc(prhs[0]), (nPrim+1));
+        ADMMint *Pi = mwIndextoInt(mxGetIr(prhs[0]), Pp[nPrim]);
         
         //and A
         ADMMfloat *Ax = (ADMMfloat*)mxGetDoubles(prhs[2]);
-        const ADMMint Annz = (ADMMint)mxGetNzmax(prhs[2]);
-        ADMMint *Ai = mwIndextoInt(mxGetIr(prhs[2]), Annz);
         ADMMint *Ap = mwIndextoInt(mxGetJc(prhs[2]), (nPrim+1));
+        ADMMint *Ai = mwIndextoInt(mxGetIr(prhs[2]), Ap[nPrim]);
         
-        eflag = superADMMsolverSparse(Px, Pp, Pi, Pnnz, q, Ax, Ap, Ai, Annz, l, u, x, y, nPrim, nDual, opts, &res);
+        eflag = superADMMsolverSparse(Px, Pp, Pi, q, Ax, Ap, Ai, l, u, x, y, nPrim, nDual, opts, &res);
 
         //Free because these are copies of the actual ones
         free(Pi);
