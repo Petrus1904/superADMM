@@ -2,11 +2,19 @@
 Fast Quadratic Program Solver with dynamic weighting ADMM
 
 This algorithm specifically solves problems of shape
-```
-minimize_x   0.5 x'Px + x'q
-subject to   l <= Ax <= u
-```
-where `x in R^n` is the optimization variable, `P in R^(n x n)` and `q in R^n` describe the quadratic cost function (P is positive semi-definite), `A in R^(m x n)` is the linear constraint mapping and `l in R^m`, `u in R^m` denote the lower and upper bounds of the constraints. Note that by setting `l_i = u_i` for some index `i`, one can also include equality constraints in the problem. Furthermore, `l_i = -inf` or `u_i = inf` allows to eliminate a lower or upper bound, respectively.
+
+$$
+    \begin{equation}
+        \begin{aligned}
+            & \underset{x}{\textbf{minimize}}
+            & & \tfrac12 x^\top P x + x^\top q\\
+            & \textbf{subject to}
+            & & l \le Ax \le u \\
+        \end{aligned}
+    \end{equation}
+$$
+
+where $x \in \mathrm{R}^n$ is the optimization variable, $P \in \mathrm{R}^{n \times n}$ and $q \in \mathrm{R}^n$ describe the quadratic cost function ($P$ is positive semi-definite), $A \in \mathrm{R}^{m \times n}$ is the linear constraint mapping and $l \in\mathrm{R}^m$, $u\in\mathrm{R}^m$ denote the lower and upper bounds of the constraints. Note that by setting $l_i = u_i$ for some index $i$, one can also include equality constraints in the problem. Furthermore, $l_i = -\infty$ or $u_i = \infty$ allows users to only consider lower or upper bounds.
 
 # Installation
 Installation is currently only available in Windows, Linux and MACOS will follow later
