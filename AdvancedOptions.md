@@ -12,7 +12,7 @@ Python: `help(pysuperADMM.superADMM)`
 | rho_0 | Double | > 0 | 1.0 |Initial penalty of the Augmented Lagrangian term. There is ADMM theory that picking the best rho_0 can accelerate convergence, however superADMM is less sensitive to this. |
 | tau | Double | (0, 1) | 0.5 |every iteration, superADMM verifies how accurate the solution was of the previous step. Due to increasing weights, this can suffer from numerical instabilities. If this harms convergence, the large weights are reduced with factor tau. |
 | alpha | Double | >= 1 | 500.0 |Alpha controls how fast the penalties in the augmented lagrangian increase or decrease. Small alphas ensure a controlled convergence, but is slower. 
-| RBound | Double | >> 1 | 1.0e8 | The penalties in R (see paper) only increase upto RBound (or 1/RBound). To properly assert superlinear convergence, RBound >> max(P,A). |
+| RBound | Double | >> 1 | 1.0e8 | The penalties in R (see paper) only increase up to RBound (or 1/RBound). To properly assert superlinear convergence, RBound >> max(P,A). |
 | eps_abs & eps_rel | Double | >= 0 | 1e-8 (both) | eps_abs and eps_rel define the solution accuracy. The solver terminates if: $\|Ax^k-z^k\|\leq \epsilon_{abs}+\epsilon_{rel}\max(\|Ax^k\|, \|z^k\|)$ and $\|Px^k+Ay^k+q\|\leq \epsilon_{abs}+\epsilon_{rel}\max(\|Px^k\|, \|Ay^k\|, \|q\|)$. |
 | eps_inf | Double | > 0 | 1e-8 | Controls the infeasibility detection. One could increase this if the solver does not terminate correctly to detect if infeasibility is an issue. |
 | repInterval | Int | >= 0 | 10 | If verbose = 1, repInterval defines how many iterations should be between a printed update. |
@@ -23,7 +23,7 @@ Python: `help(pysuperADMM.superADMM)`
 # Advanced usage of superADMM
 Every superADMM iteration, the solver computes the solution of the following linear system of equations: 
 ```math
-\begin{bmatrix}P+\sigma I & A^T \\ A & -(R^k){-1}\end{bmatrix}\begin{bmatrix}x \\ \mu \end{bmatrix} = \begin{bmatrix}\sigma x^k-q \\  z^k-(R^k)^{-1}y^k\end{bmatrix}
+\begin{bmatrix}P+\sigma I & A^T \\ A & -(R^k){-1}\end{bmatrix}\begin{bmatrix}x \\ \nu \end{bmatrix} = \begin{bmatrix}\sigma x^k-q \\  z^k-(R^k)^{-1}y^k\end{bmatrix}
 ```
 For sparse $P$ and $A$, this is solved by computing the sparse LDL decomposition and then two sparse triangular solves. As the LDL decomposition of sparse matrices can become dense (and thus very slow and memory expensive), superADMM permutes the rows and the columns such that the decomposition is as sparse as possible. This permutation algorithm is known as Approximate Minimum Degree ordering or AMD.
 Depending on the structure of $P$ and $A$, AMD can be quite expensive to compute. Fortunately, since the sparse structure remains static throughout the superADMM iterations, it is only performed once.
