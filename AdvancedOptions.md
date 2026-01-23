@@ -64,3 +64,7 @@ Please note that since Pamd is openly accessible, possible augmentations or alte
 Additionally, incorrectly changing Pamd can result in a significant increase in execution time, or even break the solver entirely. Therefore, we advice to keep Pamd as is.
 Since you have now read this warning, if you still seek to change Pamd, please note that the length is `nPrim+nDual+1`. The last entry defines the number of non-zeros in the permuted L, which verifies if a correct permutation is used. As such, if you put in the correct number of nonzeros there, superADMM will not throw a warning.
 
+# Notes for C users
+As the source is included, using superADMM is c is also possible. However, this has some notes.
+* Asserting the passed arguments are of the correct dimensions is not performed in superADMM.c (only in mex and Cython). This is a responsibility of the user.
+* For the dense solver, both P and A are in FORTRAN ordering (column first), this is inline with BLAS and LAPACK
