@@ -19,11 +19,13 @@ where $x \in \mathrm{R}^n$ is the optimization variable, $P \in \mathrm{R}^{n \t
 # Installation
 Installation is currently only available in Windows, Linux and MACOS will follow later
 ## Python
+At this moment, we are working on changing this install routine to `pip install superADMM`, but as of now, that is yet unavailable. Instead, this should be the correct (and very cumbersome) install procedure.
 - Download or clone this package
-- install `gcc` (if you havent already)
 - Download and unpack **OpenBLAS** binaries (OpenBLAS-x.x.xx_x86.zip): https://github.com/OpenMathLib/OpenBLAS/releases
-- Open Command Prompt at the superADMM python folder
-- `gcc -shared -o superADMM.dll ../src/superADMM.c ../src/csparse.c ../src/ldl.c -I"C:\PATHtoOPENBLAS\include" -L"C:\PATHtoOPENBLAS\lib" -lopenblas -DBUILD_DLL`
+- In `setup.py`, change `openblas_include` and `openblas_lib` to the folder path where you unpacked OpenBLAS.
+- Open Command Prompt at the superADMM folder (that is, the main, not superADMM/superADMM)
+- `python -m build --wheel` (this will throw a bunch of warnings, which is fine. However, it can give some errors that some packages might need to be installed, install them if so)
+- `pip install dist\superadmm-0.7.0-cpVERSION-cpVERSION-win_amd64.whl`, where VERSION is your python version (for me it says `cp313`). You can find the `.whl` file in the dist folder to check the correct name.
 - Enjoy your fast solver in Python with `import superADMM`
 
 ## MATLAB (Express installation)

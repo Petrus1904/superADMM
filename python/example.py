@@ -3,9 +3,11 @@
 
 Example python script on superADMM usage.
 """
-import superADMM
 import numpy as np
 from scipy.sparse import csc_matrix
+import os, sys
+import superADMM
+
 
 if __name__ == '__main__':
     #sample code
@@ -19,21 +21,18 @@ if __name__ == '__main__':
     A = np.vstack((A, np.eye(5)))
     l = np.hstack((-np.inf*np.ones(4), np.array([0, 0, 0, 0, 0])))
     u = np.hstack((b, np.array([10, 10, 10, 10, 10])))
-    
-    opts = superADMM.getOptimOpts()
-    opts.sigma = 1e-6
-    # mind that printing to python can be really slow
-    opts.verbose = 0
-    opts.alpha = 500
+
+    # opts = superADMM.getOptimOpts()
+    opts = {"verbose": 2}
     #solve dense
-    [x, y, eflag, info] = superADMM.superADMM(Q, c, A, l, u, ADMMoptions = opts)
+    [x, y, eflag, info] = superADMM.superADMM(Q, c, A, l, u, options = opts)
     print(x)
     print(y)
-    print(info.runtime)
-    #solve sparse
+    print(info["runtime"])
+    #solve 
     A = csc_matrix(A)
     Q = csc_matrix(Q)
-    [x1, y1, eflag1, info1] = superADMM.superADMM(Q, c, A, l, u, ADMMoptions = opts)
-    print(x)
-    print(y)
-    print(info1.runtime)
+    [x1, y1, eflag1, info1] = superADMM.superADMM(Q, c, A, l, u, options = opts)
+    print(x1)
+    print(y1)
+    print(info1["runtime"])

@@ -1,8 +1,8 @@
 % compile.m -- Compiles the superADMM solver for first use
 %   
-%   see also: superADMM, getSuperADMMopts
+%   see also: superADMM, superADMM_preCompute, superADMM_getOpts
 
-% (c) Peter Verheijen, 2025
+% (c) Peter Verheijen, 2026
 
 mex -R2018a ..\src\superADMM_mex.c ..\src\superADMM.c ..\src\csparse.c ..\src\ldl.c ..\src\ccBlas.c -output superADMM -lmwblas -lmwlapack -DMATLAB_COMP
 

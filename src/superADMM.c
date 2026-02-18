@@ -10,7 +10,6 @@
 #include <math.h>
 #include <stdbool.h>
 #include <string.h>
-#include <sys\time.h>
 #include "superADMM.h"
 #include "csparse.h"
 #include "ldl.h"
@@ -18,6 +17,7 @@
 
 //overwrite
 #ifdef MATLAB_COMP
+    #include <sys\time.h>
     #include "ccBlas.h"
     #include "mex.h" //MATLAB codegen knows what to do :)
     #define print mexPrintf
@@ -25,14 +25,20 @@
     #define min(a,b) ((a) < (b) ? (a) : (b))
 #else
     #include <cblas.h>
-    #include <time.h>
     #include <stdint.h>
     #include <windows.h>
+    // #include <time.h>
     #define print printf
-    #define clock_gettime __pthread_clock_gettime
+    // #define clock_gettime __pthread_clock_gettime
     // char buf[10000];
     // setvbuf(stdout, buf, _IOFBF, sizeof(buf));
+    typedef struct timespec{
+        LARGE_INTEGER t0;
+        LARGE_INTEGER freq;
+    } timespec;
 #endif
+
+
 
 // Define clock IDs for compatibility
 #define CLOCK_REALTIME  0
@@ -44,13 +50,40 @@ int setenv(const char *name, const char *value, ADMMint overwrite)
     return _putenv_s(name, value);
 }
 
+void startTimer(struct timespec* start){
+    #ifdef MATLAB_COMP
+        clock_gettime(CLOCK_MONOTONIC, start);
+    #else
+        QueryPerformanceFrequency(&start->freq);
+        QueryPerformanceCounter(&start->t0);
+    #endif
+}
+
 ADMMfloat dTime(struct timespec* start){
-    struct timespec end;
-    clock_gettime(CLOCK_MONOTONIC, &end);
+    #ifdef MATLAB_COMP
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+
+        ADMMfloat sec  = (ADMMfloat)(now.tv_sec  - start->tv_sec);
+        ADMMfloat nsec = (ADMMfloat)(now.tv_nsec - start->tv_nsec);
+
+        return sec + 1e-9 * nsec;
+        
+    #else
+        LARGE_INTEGER now;
+        QueryPerformanceCounter(&now);
+
+        return (ADMMfloat)(now.QuadPart - start->t0.QuadPart)
+            / (ADMMfloat)start->freq.QuadPart;
+    #endif
+}
+
+void printTime(struct timespec* start){
     ADMMfloat timeElapsed;
-    timeElapsed = (ADMMfloat)(end.tv_sec-start->tv_sec)*1e9;
-    timeElapsed = (timeElapsed + (end.tv_nsec - start->tv_nsec))*1e-9;
-    return timeElapsed;
+
+    timeElapsed = dTime(start);
+    print("%2.6f s\n", timeElapsed);
+    startTimer(start);
 }
 
 void printVector(const char* str, ADMMint* x, ADMMint n){
@@ -260,7 +293,7 @@ csldl *cs_ldlfree (csldl *S)
     cs_free(S->Lp);
     cs_free(S->Li);
     cs_free(S->Lx);
-    cs_free(S->P);
+    //cs_free(S->P);
     cs_free(S->Pinv);
     cs_free(S->Parent);
     cs_free(S->Lnz);
@@ -382,7 +415,7 @@ ADMMint LDL_rankn_solve(csldl* S,           /* The LDL data package */
     return nPrim;
 }
 
-csldl* LDL_symb(const cs *A, ADMMint order){
+csldl* LDL_symb(const cs *A, ADMMint* P, ADMMint order){
     /*
     Wrapper function for the LDL_symbolic from ldl.c. Included inverse permutation from CSparse.
     */
@@ -392,18 +425,25 @@ csldl* LDL_symb(const cs *A, ADMMint order){
     csldl* S = cs_calloc(1, sizeof (csldl));
     if(!S) return NULL; /*failure*/
     
-    ADMMint *P;
+    ADMMint* Pamd;
     ADMMint n = A->n;
-    //AMD fails on diagonal matrices. Fortunately, those are the easiest to invert.
-    if(!cs_isdiag(A)){
-        P = cs_amd(A, order);               /* P = amd(A+A'), or natural */
-    } else {
-        P = cs_malloc(A->n, sizeof(ADMMint));
-        for(ADMMint i = 0; i < A->n; i++){
-            P[i] = i; //no permutation
+    ADMMint redefineP = 0;
+    if(P[0] == -1){
+        //AMD fails on diagonal matrices. Fortunately, those are the easiest to invert.
+        if(!cs_isdiag(A)){
+            Pamd = cs_amd(A, order);               /* P = amd(A+A'), or natural */
+            for(ADMMint i = 0; i < A->n; i++){ //copy and clear
+                P[i] = Pamd[i];
+            }
+            cs_free(Pamd);
+        } else {
+            P = cs_malloc(A->n+1, sizeof(ADMMint));
+            for(ADMMint i = 0; i < A->n; i++){
+                P[i] = i; //no permutation
+            }
         }
+        redefineP = 1;
     }
-    
     if(!P){
         cs_free(S);
         return NULL;
@@ -426,7 +466,7 @@ csldl* LDL_symb(const cs *A, ADMMint order){
         cs_free(Lnz);
         cs_free(Flag);
         cs_free(Pinv);
-        cs_free(P);
+        // cs_free(P);
         cs_free(S);
         return NULL;
     }
@@ -444,7 +484,13 @@ csldl* LDL_symb(const cs *A, ADMMint order){
     S->Y = cs_malloc(n, sizeof(ADMMfloat));
     S->Li = cs_malloc(max(1,lnz), sizeof(ADMMint));
     S->Pattern = cs_malloc(n, sizeof(ADMMint));
-
+    if(redefineP == 0){
+        //check if sizes match
+        if(P[A->n] != lnz){
+            print("superADMM Warning: given permutation vector Pamd might not be optimal. This can result in a substantial performance loss. \n");
+        }
+    }
+    P[A->n] = lnz; //we always update. If someone presents a better Pamd, this omits the warning a second time
     return S;
 }
 
@@ -556,13 +602,7 @@ cs* assemblePARA_cs(const cs* P, const cs* A, const ADMMfloat* R, const ADMMfloa
 }
 
 
-void printTime(struct timespec* start){
-    ADMMfloat timeElapsed;
 
-    timeElapsed = dTime(start);
-    print("%2.6f s\n", timeElapsed);
-    clock_gettime(CLOCK_MONOTONIC, start);
-}
 
 /* superADMMsolverDense solves quadratic program 
    min_x 0.5x'*P*x + x'*q
@@ -608,8 +648,10 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     struct timespec tstart, ttotal, tLoopTask;
     ADMMfloat timeLoop1 = 0, timeLoop2 = 0, timeLoop3 = 0, timeLoop4 = 0, timeLoop5 = 0;
 
-    clock_gettime(CLOCK_MONOTONIC, &tstart);
-    clock_gettime(CLOCK_MONOTONIC, &ttotal);
+    if(opts.verbose != 0){
+        startTimer(&tstart);
+    }
+    startTimer(&ttotal);
     
     const ADMMint infeasInterval = 10;
 
@@ -646,7 +688,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     ADMMfloat zero = 0.0;
     ADMMint LSinfo;
     ADMMint nrhs = 1;
-    ADMMint eflag = 1; //OK
+    ADMMint eflag = EFLAG_SOLVED; //OK
     ADMMint repHeadercnt = 0;
     ADMMfloat cond = 0.0;
 
@@ -655,6 +697,11 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     ADMMfloat rPrim = 2*opts.eps_abs;
     ADMMfloat rDual = 2*opts.eps_abs;
     ADMMint Rupdates = 2*nDual;
+
+    ADMMfloat q_rel = cblas_amax(nPrim, q, 1);
+    ADMMfloat Px_rel = 1;
+    ADMMfloat Aty_rel = 1;
+    ADMMfloat prim_rel = 0;
 
     //set R and Z
     vec_dset(nDual, opts.rho_0, R);
@@ -675,7 +722,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     ADMMint nIter;
     for(nIter = 0; nIter < opts.maxIter; nIter++){
 
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) startTimer(&tLoopTask);
         //compute A'*(R*z-y)-q
         cblas_copy(nPrim, q, 1, tmp_q, 1);
         if(opts.sigma > 0) cblas_axpy(nPrim, -opts.sigma, x, 1, tmp_q, 1); //-sigma because I later do -tmp_q, so it becomes plus then :)
@@ -685,49 +732,51 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
         }
         cblas_gemv(CblasColMajor, CblasTrans, nDual, nPrim, 1.0, A, nDual, tmp_y, 1, -1.0, tmp_q, 1);
 
-        timeLoop1 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) {
+            timeLoop1 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
         //copy for precision check
         if((nIter+1) % infeasInterval == 0) cblas_copy(nPrim, x, 1, xp, 1); //copy instead
         cblas_copy(nPrim, tmp_q, 1, x, 1);
         
+        lapack_lacpy(&uplopos, &nPrim, &nPrim, PARA, &nPrim, tmpP, &nPrim); //copy upper triangular part of PARA for condition check
 
         //x^k+1 = solve using LAPACK -- I use the direct FORTRAN call here since this works with large matrices
         // Since PARA is posdef by definition, we use the dposv function. This uses Cholesky decomposition and more importantly, 
         // only considers the upper triangular part of PARA. Conversevely, we also only compute that part to save more time :).
-        // if(Rupdates < opts.lowRankPer*nDual){ //low rank cholesky is slower than plain cholesky... practically regardless of the amount
-        //     //tmpP is the cholesky decomp.
-        //     LSinfo = chol_lowRankUpdate(tmpP, A, Rup, tmp_x, nDual, nPrim);
-        //     cblas_trsv(CblasColMajor, CblasLower, CblasNoTrans, CblasNonUnit, nPrim, tmpP, nPrim, x, 1);
-        //     cblas_trsv(CblasColMajor, CblasLower, CblasTrans, CblasNonUnit, nPrim, tmpP, nPrim, x, 1);
-        // } else {
-            lapack_lacpy(&uplopos, &nPrim, &nPrim, PARA, &nPrim, tmpP, &nPrim); //copy upper triangular part of PARA for condition check
-            lapack_posv(&uplopos, &nPrim, &nrhs, tmpP, &nPrim, x, &nPrim, &LSinfo);
-        // }
-        
+        lapack_posv(&uplopos, &nPrim, &nrhs, tmpP, &nPrim, x, &nPrim, &LSinfo);
         
         if(LSinfo != 0){ //matrix is not positive definite. Either singular or contains negative eigenvalues (non-convex)
             if(opts.verbose == 1) print("Cholesky failed with info: %d exiting solver\n", LSinfo);
-            eflag = -1;
+            eflag = EFLAG_FAILED;
             break; //something went wrong
         }
-        timeLoop2 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) {
+            timeLoop2 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
         
         //z^k+1 = Ax^k+1
         cblas_gemv(CblasColMajor, CblasNoTrans, nDual, nPrim, 1.0, A, nDual, x, 1, 0.0, z, 1);
         //also update y^k+1
         ADMMfloat zpp;
+        prim_rel = 0; //reset
         for(ADMMint i = 0; i < nDual; i++){
             zpp = z[i] + y[i]/R[i];
             if(zpp > u[i]) zpp = u[i];
             if(zpp < l[i]) zpp = l[i];
             tmp_y[i] = z[i]-zpp; //keep for rPrim check
+            if(opts.eps_rel > 0){
+                prim_rel = max(max(abs(z[i]),abs(zpp)), prim_rel);
+            }
             y[i] = y[i] + R[i]*tmp_y[i];
             z[i] = zpp;
         }
-        timeLoop3 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) {
+            timeLoop3 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
 
         //do Condition check before convergence -- allows me to re-use temps
         //tmpq = PARA*x-tmpq
@@ -742,19 +791,35 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
         cblas_gemv(CblasColMajor, CblasTrans, nDual, nPrim, 1.0, A, nDual, y, 1, 1.0, tmp_q, 1); //tmpq = P*x + q+ A'*y;
         rDual = cblas_amax(nPrim, tmp_q, 1);
 
-        if(rPrim < opts.eps_abs && rDual < opts.eps_abs){ //no relative check yet
+        cblas_copy(nPrim, q, 1, tmp_q, 1); //tmpq = q
+        if(opts.eps_rel == 0){
+            cblas_symv(CblasColMajor, CblasUpper, nPrim, 1.0, P, nPrim, x, 1, 1.0, tmp_q, 1); //tmpq = q + P*x
+            cblas_gemv(CblasColMajor, CblasTrans, nDual, nPrim, 1.0, A, nDual, y, 1, 1.0, tmp_q, 1); //tmpq = P*x + q+ A'*y;
+            rDual = cblas_amax(nPrim, tmp_q, 1);
+        } else {
+            //special loop here
+            cblas_symv(CblasColMajor, CblasUpper, nPrim, 1.0, P, nPrim, x, 1, 0.0, tmp_x, 1); // tmpx = P*x
+            Px_rel = cblas_amax(nPrim, tmp_x, 1);
+            cblas_axpy(nPrim, 1, tmp_x, 1, tmp_q, 1); //tmpq = q + P*x;
+            cblas_gemv(CblasColMajor, CblasTrans, nDual, nPrim, 1.0, A, nDual, y, 1, 0.0, tmp_x, 1); //tmpx = AT*y
+            Aty_rel = cblas_amax(nPrim, tmp_x, 1);
+            cblas_axpy(nPrim, 1, tmp_x, 1, tmp_q, 1); //tmpq = q + P*x + AT*y;
+            rDual = cblas_amax(nPrim, tmp_q, 1);
+        }
+
+        if(rPrim < opts.eps_abs + opts.eps_rel*prim_rel && rDual < opts.eps_abs + opts.eps_rel*max(q_rel, max(Px_rel, Aty_rel))){
             //converged
             break;
         }
         if(isnan(rPrim) || isnan(rDual)){
             //protection
-            eflag = -1;
+            eflag = EFLAG_FAILED;
             break;
         }
         //check if time limit is exceeded
         if(opts.timeLimit > 0){
             if(dTime(&ttotal) > opts.timeLimit){
-                eflag = -3;
+                eflag = EFLAG_TIMELIMIT;
                 break;
             }
         }
@@ -783,7 +848,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
                     //problem is primal infeasible
                     cblas_copy(nPrim, xp, 1, x, 1);
                     cblas_copy(nDual, tmp_y, 1, y,1);
-                    eflag = -2;
+                    eflag = EFLAG_INFEASIBLE;
                     break;
                 }
             }
@@ -816,22 +881,23 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
                     if(isDualInfeas){
                         cblas_copy(nPrim, xp, 1, x, 1);
                         cblas_copy(nDual, tmp_y, 1, y,1);
-                        eflag = -2;
+                        eflag = EFLAG_INFEASIBLE;
                         break;
                     }
                 }
             }
         }//in feas check interval
-
-        timeLoop4 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) {
+            timeLoop4 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
         //update R
         Rupdates = 0;
         if(cond - rPrim > -1e-2*cond || cond - rDual > -1e-2*cond){
             bound *= opts.tau;
             Rupdates = nDual;
             if(bound < 1){
-                eflag = 2;
+                eflag = EFLAG_INACCURATE;
                 break;
             }
         }
@@ -851,8 +917,6 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
                 } else {
                     R[i] = bound;
                 }
-                
-                // R[i] = min(bound, R[i]*opts.alpha);
             } else {
                 if(R[i] > 1/bound){
                     R[i] = max(1/bound, R[i]/opts.alpha); 
@@ -861,10 +925,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
                 } else {
                     R[i] = 1/bound;
                 }
-                
-                // R[i] = max(1/bound, R[i]/opts.alpha); 
             }
-            // Rup[i] = (R[i]) - (Rt);
         }
         if(Rupdates < opts.lowRankPer*nDual){
             updatePARA(A, Rup, PARA, nDual, nPrim);
@@ -873,7 +934,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
         }
 
         if(opts.verbose == 1 && nIter % opts.repInterval == 0){
-            print("|  %3d | %.3e | %.3e | %.3e | %.3e | %d\n", nIter, rPrim, rDual, cond, bound, Rupdates);
+            print("|  %3d | %.3e | %.3e | %.3e | %.3e |\n", nIter, rPrim, rDual, cond, bound);
             repHeadercnt++;
             if(repHeadercnt >= 25){
                 print("| Iter | rPrim     | rDual     | rCond     | Bound     | MESSAGE \n");
@@ -881,52 +942,50 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
             }
         }
         
-        timeLoop5 += dTime(&tLoopTask);
+        if(opts.verbose == 2) timeLoop5 += dTime(&tLoopTask);
 
     }
     if(nIter == opts.maxIter){
-        eflag = 0;
+        eflag = EFLAG_MAXITER;
     }
     ADMMfloat objVal = 0;
     cblas_symv(CblasColMajor, CblasUpper, nPrim, 1.0, P, nPrim, x, 1, 0.0, tmp_x, 1);
     objVal = 0.5*cblas_dot(nPrim, tmp_x, 1, x, 1); //0.5*x^T*P*x
     objVal += cblas_dot(nPrim, x, 1, q, 1);
+
+    char *exitMsg;
     switch(eflag){
-        case 0:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | MAXIMUM ITERATIONS REACHED\n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_MAXITER:
+            exitMsg = "MAXIMUM ITERATIONS REACHED";
             info->status = "max iteration reached";
             break;
-        case 1:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | COMPLETED\n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_SOLVED:
+            exitMsg = "COMPLETED";
             info->status = "solved";
             break;
-        case 2:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | REQUESTED TOLERANCE NOT ACHIEVABLE \n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_INACCURATE:
+            exitMsg = "REQUESTED TOLERANCE NOT ACHIEVABLE";
             info->status = "solved inaccurate";
             break;
-        case -1:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | SOLVER FAILED \n", nIter, rPrim, rDual, cond, bound);
-            info->status = "failed";
-            break;
-        case -2:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | PROBLEM INFEASIBLE OR UNBOUNDED \n", nIter, rPrim, rDual, cond, bound);
-            info->status = "infeasible or unbounded";
-            break;
-        case -3:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | TIME LIMIT EXCEEDED \n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_TIMELIMIT:
+            exitMsg = "TIME LIMIT EXCEEDED";
             info->status = "time limit exceeded";
             break;
+        case EFLAG_FAILED:
+            exitMsg = "LDL^T FAILED, MATRIX SINGULAR";
+            info->status = "failed";
+            break;
+        case EFLAG_INFEASIBLE:
+            exitMsg = "PROBLEM INFEASIBLE OR UNBOUNDED";
+            info->status = "infeasible or unbounded";
+            break;
+        case EFLAG_NONCONVEX:
+            exitMsg = "PROBLEM NON-CONVEX";
+            info->status = "problem non-convex";
+            break;
     }
-    if(opts.verbose == 1){
-        print("+------+-----------+-----------+-----------+-----------+---------\n");
-        
-        //print the final stuff
-        print("\n");
-        print("Iterations:     %d\n", nIter);
-        print("Run Time:       ");
-        printTime(&tstart);
-        print("Objective:      %.4f\n", objVal);
-    } 
+    if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | %s\n", nIter, rPrim, rDual, cond, bound, exitMsg);
+
     if(opts.verbose == 2){
         print("Loop---------------------\n");
         print("--Time KKT:      %2.6f s\n", timeLoop1);
@@ -953,9 +1012,21 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
 
     info->runtime = dTime(&ttotal);
     info->nIter = nIter;
-    info->rPrim = rPrim;
-    info->rDual = rDual;
+    info->prim_res = rPrim;
+    info->dual_res = rDual;
+    info->prim_tol = opts.eps_abs + opts.eps_rel*prim_rel;
+    info->dual_tol = opts.eps_abs + opts.eps_rel*max(q_rel, max(Px_rel, Aty_rel));
     info->objVal = objVal;
+
+    if(opts.verbose == 1){
+        print("+------+-----------+-----------+-----------+-----------+---------\n");
+        
+        //print the final stuff
+        print("\n");
+        print("Iterations:     %d\n", nIter);
+        print("Run Time:       %2.6f\n", info->runtime);
+        print("Objective:      %.4f\n", objVal);
+    } 
 
     if(opts.verbose == 2){
         print("Total time:      ");
@@ -1017,8 +1088,8 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     struct timespec tstart, ttotal, tLoopTask;
     ADMMfloat timeLoop1 = 0, timeLoop2 = 0, timeLoop3 = 0, timeLoop4 = 0, timeLoop5 = 0;
 
-    clock_gettime(CLOCK_MONOTONIC, &tstart);
-    clock_gettime(CLOCK_MONOTONIC, &ttotal);
+    if(opts.verbose != 0) startTimer(&tstart);
+    startTimer(&ttotal);
 
     const ADMMint infeasInterval = 10;
     //Allocate R
@@ -1033,7 +1104,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     ADMMfloat* tmp_x  = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
     ADMMfloat* tmp_y  = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
     ADMMfloat* xp     = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
-    ADMMfloat *tmp_yy = (ADMMfloat*) malloc(nDual*sizeof(ADMMfloat));
+    ADMMfloat *tmp_yy = (ADMMfloat*) malloc(nDual * sizeof(ADMMfloat));
 
     //Allocate all intermediate helper matrices
     cs* PARA;
@@ -1043,7 +1114,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
 
     //stuff used for LAPACK FORTRAN calls
     ADMMint LSinfo;
-    ADMMint eflag = 1; //OK
+    ADMMint eflag = EFLAG_SOLVED; //OK
 
     ADMMint repHeadercnt = 0; //if 25, we reprint the header.
 
@@ -1053,7 +1124,17 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     ADMMfloat rDual = 1.0;
     ADMMfloat cond;
 
+    //check if bound is good
+    // ADMMfloat Pmax = cblas_amax(P.nzmax, P.x, 1);
+    // if(Pmax*1e4 > bound){
+    //     bound = Pmax*1e4;
+    // }
     ADMMint nKKT = nDual+nPrim;
+
+    ADMMfloat q_rel = cblas_amax(nPrim, q, 1);
+    ADMMfloat Px_rel = 1;
+    ADMMfloat Aty_rel = 1;
+    ADMMfloat prim_rel = 0;
 
     //set R and Z
     vec_dset(nKKT, 0.0, Rtmp);
@@ -1062,10 +1143,10 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     if(opts.alpha == 1) vec_dset(nDual, 0.0, Rup);
     vec_dset(nDual, 0.0, z);
     cs_gaxpy(&A, x, z);
-    
+
     //PARA = [P+sigmaI, A'; A, -R^{-1}];
     PARA = assemblePARA_cs(&P, &A, R, opts.sigma, nDual, nPrim);
-    S = LDL_symb(PARA, 0);
+    S = LDL_symb(PARA, opts.Pamd, 0);
     if(!S){
         print("symbolic failed\n");
     }
@@ -1086,15 +1167,15 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
 
         if(!S){
             //exit loop immediately
-            eflag = -1;
+            eflag = EFLAG_FAILED;
             break;
         }
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) startTimer(&tLoopTask);
         //compute [sigma*x -q; z-R^-1*y ]
         //For those raising eyebrows on this weird 4-step for loop
         // somewhere I read that this makes memory loading more efficient as the compiler
         // now loads a whole batch instead of every individual variable.
-        // and it enables possible SIMD
+        // and it thus enables possible SIMD
         ADMMint jj;
         for(jj = 0; jj < nPrim-3; jj+=4){
             rhs[jj]   = opts.sigma*x[jj]   - q[jj];
@@ -1115,10 +1196,10 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         for(; jj < nDual; jj++){
             rhs[nPrim+jj] = z[jj] - y[jj]/R[jj];
         }
-        timeLoop1 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
-
-        if((nIter+1) % infeasInterval == 0) cblas_copy(nPrim, x, 1, xp, 1); //copy instead
+        if(opts.verbose == 2) {
+            timeLoop1 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
 
         //x^k+1 = solve
         if(Rupdates < opts.lowRankPer*nDual){
@@ -1135,71 +1216,92 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
                     print("The sigma option is set to zero, this can cause the solver to fail. Please retry with a positive sigma\n");
                 }
             }
-            eflag = -1;
+            eflag = EFLAG_FAILED;
             break; //something went wrong
         } else if(LSinfo < nPrim){
             if(opts.verbose == 1){
                 print("iter: %d, Problem seems to be non-convex\n", nIter);
             }
-            eflag = -4;
+            eflag = EFLAG_NONCONVEX;
             break; //something went wrong
         }
+        if(opts.verbose == 2) {
+            timeLoop2 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
 
-        timeLoop2 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
-
-        cblas_copy(nPrim, sol, 1, x, 1);
-        
+        if((nIter+1) % infeasInterval == 0) cblas_copy(nPrim, x, 1, xp, 1); //copy for infeas check
+        cblas_copy(nPrim, sol, 1, x, 1); //store x from sol
+    
         //update z^k+1, y^k+1
         ADMMfloat zpp;
+        prim_rel = 0; //reset
         for(ADMMint i = 0; i < nDual; i++){
             z[i] = z[i] + (sol[nPrim+i] - y[i])/R[i];
             zpp = z[i] + y[i]/R[i];
             if(zpp > u[i]){ zpp = u[i]; }
             else if(zpp < l[i]){ zpp = l[i]; }
             tmp_y[i] = z[i]-zpp; //keep for rPrim check
+            if(opts.eps_rel > 0){
+                prim_rel = max(max(abs(z[i]),abs(zpp)), prim_rel);
+            }
             y[i] = y[i] + R[i]*tmp_y[i];
             z[i] = zpp;
         }
-        timeLoop3 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) {
+            timeLoop3 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
 
         //do Condition check before convergence -- allows me to re-use temps
         cblas_scal(nPrim+nDual, -1.0, rhs, 1); //rhs = -rhs
         cs_syaxpy(PARA, sol,rhs); //rhs = PARA*sol - rhs
         cond = cblas_amax(nPrim+nDual, rhs, 1);
         
-
         //check convergence
         rPrim = cblas_amax(nDual, tmp_y, 1); //easy :)
-        //dual convergence P*x + q + A'y;
+        
+        //dual convergence P*x + q + A'y
         cblas_copy(nPrim, q, 1, tmp_q, 1); //tmpq = q
-        cs_syaxpy(&P, x, tmp_q); //tmpq = q + P*x
-        cs_gatxpy(&A, y, tmp_q); //tmpq = q + P*x + AT*y
-        rDual = cblas_amax(nPrim, tmp_q, 1);
+        if(opts.eps_rel == 0){
+            cs_syaxpy(&P, x, tmp_q); //tmpq = q + P*x
+            cs_gatxpy(&A, y, tmp_q); //tmpq = q + P*x + AT*y
+            rDual = cblas_amax(nPrim, tmp_q, 1);
+        } else {
+            //special loop here
+            vec_dset(nPrim, 0.0, tmp_x);
+            cs_syaxpy(&P, x, tmp_x); //tmpx = P*x
+            Px_rel = cblas_amax(nPrim, tmp_x, 1);
+            cblas_axpy(nPrim, 1, tmp_x, 1, tmp_q, 1); //tmpq = q + P*x;
+            vec_dset(nPrim, 0.0, tmp_x);
+            cs_gatxpy(&A, y, tmp_x); //tmpx = AT*y
+            Aty_rel = cblas_amax(nPrim, tmp_x, 1);
+            cblas_axpy(nPrim, 1, tmp_x, 1, tmp_q, 1); //tmpq = q + P*x + AT*y;
+            rDual = cblas_amax(nPrim, tmp_q, 1);
+        }
 
-        if(rPrim < opts.eps_abs && rDual < opts.eps_abs){ //no relative check yet
+        if(rPrim < opts.eps_abs + opts.eps_rel*prim_rel && rDual < opts.eps_abs + opts.eps_rel*max(q_rel, max(Px_rel, Aty_rel))){ //no relative check yet
             //converged
-            //Problem -- Since Ax-z is computed differently, the tolerance *could*
-            // not be reached yet. Perhaps recompute at this point?
+            //Problem -- Since the termination criteria are computed differently, 
+            // the tolerance *could* not be reached yet. Perhaps recompute at this point?
             for(ADMMint i = 0; i < nDual; i++){
                 tmp_y[i] = -z[i];
             }
             cs_gaxpy(&A, x, tmp_y);
             rPrim = cblas_amax(nDual, tmp_y, 1);
-            if(rPrim < opts.eps_abs){
+            if(rPrim < opts.eps_abs + opts.eps_rel*prim_rel){
                 break;
             }   
         }
         if(isnan(rPrim) || isnan(rDual)){
             //protection
-            eflag = -1;
+            eflag = EFLAG_FAILED;
             break;
         }
          //check if time limit is exceeded -- after the convergence is checked
         if(opts.timeLimit > 0){
             if(dTime(&ttotal) > opts.timeLimit){
-                eflag = -3;
+                eflag = EFLAG_TIMELIMIT;
                 break;
             }
         }
@@ -1229,7 +1331,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
                     //problem is primal infeasible
                     cblas_copy(nPrim, xp, 1, x, 1);
                     cblas_copy(nDual, tmp_y, 1, y,1);
-                    eflag = -2;
+                    eflag = EFLAG_INFEASIBLE;
                     break;
                 }
             }
@@ -1267,7 +1369,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
                         //if infeasible, overwrite x and y with the primal and dual certificates
                         cblas_copy(nPrim, xp, 1, x, 1);
                         cblas_copy(nDual, tmp_y, 1, y,1);
-                        eflag = -2;
+                        eflag = EFLAG_INFEASIBLE;
                         break;
                     }
                 }
@@ -1280,7 +1382,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
             bound *= opts.tau;
             Rupdates = nDual;
             if(bound < 1){
-                eflag = 2;
+                eflag = EFLAG_INACCURATE;
                 break;
             }
         }
@@ -1292,8 +1394,10 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
                 repHeadercnt = 0;
             }
         }
-        timeLoop4 += dTime(&tLoopTask);
-        clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+        if(opts.verbose == 2) {
+            timeLoop4 += dTime(&tLoopTask);
+            startTimer(&tLoopTask);
+        }
 
         ADMMint idx;
         ADMMfloat Rt;
@@ -1323,7 +1427,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
             }
         }
         // print("iter: %d, Rupdates: %d \n", nIter, Rupdates);
-        timeLoop5 += dTime(&tLoopTask);
+        if(opts.verbose == 2) timeLoop5 += dTime(&tLoopTask);
 
     }
     if(opts.verbose == 2){
@@ -1336,9 +1440,9 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         print("Loop Total:      ");
         printTime(&tstart);
     }
-    clock_gettime(CLOCK_MONOTONIC, &tLoopTask);
+    if(opts.verbose == 2) startTimer(&tLoopTask);
     if(nIter == opts.maxIter){
-        eflag = 0;
+        eflag = EFLAG_MAXITER;
     }
     ADMMfloat objVal = 0;
     vec_dset(nPrim, 0.0, tmp_x);
@@ -1346,46 +1450,47 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     objVal = 0.5*cblas_dot(nPrim, tmp_x, 1, x, 1); //0.5*x^T*P*x
     objVal += cblas_dot(nPrim, x, 1, q, 1);
     
+    char *exitMsg;
     switch(eflag){
-        case 0:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | MAXIMUM ITERATIONS REACHED\n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_MAXITER:
+            exitMsg = "MAXIMUM ITERATIONS REACHED";
             info->status = "max iteration reached";
             break;
-        case 1:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | COMPLETED\n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_SOLVED:
+            exitMsg = "COMPLETED";
             info->status = "solved";
             break;
-        case 2:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | REQUESTED TOLERANCE NOT ACHIEVABLE \n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_INACCURATE:
+            exitMsg = "REQUESTED TOLERANCE NOT ACHIEVABLE";
             info->status = "solved inaccurate";
             break;
-        case -1:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | LDL^T FAILED, MATRIX SINGULAR \n", nIter, rPrim, rDual, cond, bound);
-            info->status = "failed";
-            break;
-        case -2:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | PROBLEM INFEASIBLE OR UNBOUNDED \n", nIter, rPrim, rDual, cond, bound);
-            info->status = "infeasible or unbounded";
-            break;
-        case -3:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | TIME LIMIT EXCEEDED \n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_TIMELIMIT:
+            exitMsg = "TIME LIMIT EXCEEDED";
             info->status = "time limit exceeded";
             break;
-        case -4:
-            if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | PROBLEM NON-CONVEX \n", nIter, rPrim, rDual, cond, bound);
+        case EFLAG_FAILED:
+            exitMsg = "LDL^T FAILED, MATRIX SINGULAR";
+            info->status = "failed";
+            break;
+        case EFLAG_INFEASIBLE:
+            exitMsg = "PROBLEM INFEASIBLE OR UNBOUNDED";
+            info->status = "infeasible or unbounded";
+            break;
+        case EFLAG_NONCONVEX:
+            exitMsg = "PROBLEM NON-CONVEX";
             info->status = "problem non-convex";
             break;
     }
-    if(opts.verbose == 1){
-        print("+------+-----------+-----------+-----------+-----------+---------\n");
-        
-        //print the final stuff
-        print("\n");
-        print("Iterations:     %d\n", nIter);
-        print("Run Time:       ");
-        printTime(&tstart);
-        print("Objective:      %.4f\n", objVal);
-    } 
+    if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | %s\n", nIter, rPrim, rDual, cond, bound, exitMsg);
+
+    info->runtime = dTime(&ttotal);
+    info->nIter = nIter;
+    info->prim_res = rPrim;
+    info->dual_res = rDual;
+    info->prim_tol = opts.eps_abs + opts.eps_rel*prim_rel;
+    info->dual_tol = opts.eps_abs + opts.eps_rel*max(q_rel, max(Px_rel, Aty_rel));
+    info->objVal = objVal;
+    info->Pamd = S->P;
 
     //clean-up
     free(R);
@@ -1402,11 +1507,15 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     free(rhs);
     free(sol);
 
-    info->runtime = dTime(&ttotal);
-    info->nIter = nIter;
-    info->rPrim = rPrim;
-    info->rDual = rDual;
-    info->objVal = objVal;
+    if(opts.verbose == 1){
+        print("+------+-----------+-----------+-----------+-----------+---------\n");
+        
+        //print the final stuff
+        print("\n");
+        print("Iterations:     %d\n", nIter);
+        print("Run Time:       %2.6f\n", info->runtime);
+        print("Objective:      %.4f\n", objVal);
+    } 
 
     if(opts.verbose == 2){
         print("Termination:     ");
@@ -1418,46 +1527,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
 
     return eflag;
 }
-
-/*
-int LDLtest(ADMMfloat* Pdata, ADMMint *Prowptr, ADMMint *Pcolidx, ADMMint Pnnz, ADMMint nPrim, ADMMfloat* q, ADMMfloat *x){
-    ADMMint LSi = 0;
-    css* Si;
-    const cs Pi = {Pnnz, nPrim, nPrim, Prowptr, Pcolidx, Pdata, -1};
-    Si = LDL_symb(&Pi, 0);
-    ADMMfloat* tmp_xi; //temporary vector of size x
-    tmp_xi = (ADMMfloat*) malloc(nPrim * sizeof(ADMMfloat));
-    cblas_copy(nPrim, q, 1, x, 1);
-    struct timespec tstar;
-    clock_gettime(CLOCK_MONOTONIC, &tstar);
-    LSi = LDLsolve(&Pi, x, Si);
-    print("native LDL took:  ");
-    printTime(&tstar);
-    cblas_copy(nPrim, q, 1, tmp_xi, 1);
-    cblas_scal(nPrim, -1.0, tmp_xi, 1);
-    cs_gaxpy(&Pi, x, tmp_xi); //tmpq = q + P*x
-    double rBK = cblas_amax(nPrim, tmp_xi, 1);
-    print("LDL err = %.9e \n", rBK);
-
-    Si = LDL_symb(&Pi, 0);
-    cblas_copy(nPrim, q, 1, x, 1);
-    clock_gettime(CLOCK_MONOTONIC, &tstar);
-    LSi = BK_LDLsolve(&Pi, x, Si);
-    print("BK LDL took:  ");
-    printTime(&tstar);
-    cblas_copy(nPrim, q, 1, tmp_xi, 1);
-    cblas_scal(nPrim, -1.0, tmp_xi, 1);
-    cs_gaxpy(&Pi, x, tmp_xi); //tmpq = q + P*x
-    rBK = cblas_amax(nPrim, tmp_xi, 1);
-    print("BK err = %.9e\n", rBK);
-
-    cs_sfree(Si);
-    free(tmp_xi);
-    print("Error = %d \n", LSi);
-
-    return 0;
-}
-*/
 
 int main() {
 

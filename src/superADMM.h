@@ -69,18 +69,20 @@
 #endif
 
 typedef struct ADMMopts{
-    ADMMint verbose;
-    ADMMint maxIter;
-    ADMMfloat sigma;    //slack on x -- ensures posDEF in P+ARA
-    ADMMfloat rho_0;    //starting coeff
-    ADMMfloat tau;      //exponential Bound decrease
-    ADMMfloat alpha;    //exponential increase
-    ADMMfloat RBound;   //limit on R
-    ADMMfloat eps_abs;  //absolute tolerance
-    ADMMfloat eps_inf;  //relative tolerance
-    ADMMint repInterval; //reporting interval
-    ADMMfloat timeLimit;//execution time limit, use 0 for unlimited
+    ADMMint verbose;      //silent = 0; iter = 1; timing + memory = 2;
+    ADMMint maxIter;      //maximum iterations for the solver
+    ADMMfloat sigma;      //slack on x -- ensures posDEF in P+ARA
+    ADMMfloat rho_0;      //starting coeff
+    ADMMfloat tau;        //exponential Bound decrease
+    ADMMfloat alpha;      //exponential increase
+    ADMMfloat RBound;     //limit on R
+    ADMMfloat eps_abs;    //absolute tolerance
+    ADMMfloat eps_rel;    //relative tolerance
+    ADMMfloat eps_inf;    //infeasibility tolerance
+    ADMMint repInterval;  //reporting interval
+    ADMMfloat timeLimit;  //execution time limit, use 0 for unlimited
     ADMMfloat lowRankPer; //percentage required to execute low rank updates instead of full LDL, default 0.05 (5%)
+    ADMMint *Pamd;      //preinitialized AMD sorting vector of length nPrim+nDual.
 } ADMMopts;
 
 //default options
@@ -92,18 +94,31 @@ typedef struct ADMMopts{
 #define DEFALPHA   500.0
 #define DEFRBOUND  1.0e8
 #define DEFEPSABS  1e-8
+#define DEFEPSREL  1e-8
 #define DEFEPSINF  1e-8
 #define DEFREPIVAL 10
 #define DEFTIMELIM 0.0
 #define DEFLRPER   0.05
 
+//exitflags
+#define EFLAG_MAXITER 0
+#define EFLAG_SOLVED 1
+#define EFLAG_INACCURATE 2
+#define EFLAG_FAILED -1
+#define EFLAG_INFEASIBLE -2
+#define EFLAG_TIMELIMIT -3
+#define EFLAG_NONCONVEX -4
+
 typedef struct ADMMinfo{
-    ADMMint nIter;          //number of iterations it took
-    ADMMfloat rPrim;    //primal convergence score
-    ADMMfloat rDual;    //dual convergence score
+    ADMMint nIter;      //number of iterations it took
+    ADMMfloat prim_res; //primal convergence score
+    ADMMfloat dual_res; //dual convergence score
+    ADMMfloat prim_tol; //primal tolerance
+    ADMMfloat dual_tol; //dual tolerance
     ADMMfloat runtime;  //run time in seconds
     ADMMfloat objVal;   //The objective value
     char* status;       //the solver status
+    ADMMint* Pamd;      //the resulting permutation vector
 } ADMMinfo;
 
 typedef struct csLDL{

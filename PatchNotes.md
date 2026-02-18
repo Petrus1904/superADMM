@@ -1,4 +1,12 @@
 # Patch Notes
+## V0.7.0
+- Relative termination criteria are now included. The solver now terminates if $\|Ax^k-z^k\|\leq \epsilon_{abs}+\epsilon_{rel}\max(\|Ax^k\|, \|z^k\|)$ and $\|Px^k+Ay^k+q\|\leq \epsilon_{abs}+\epsilon_{rel}\max(\|Px^k\|, \|Ay^k\|, \|q\|)$. `opts.eps_rel` is added as a solver options to tweak this bound. Set to zero to disable relative termination, default `1e-8`.
+- As a result of the change above, the info package at the end of the solver also includes the considered termination criteria, to avoid confusion.
+- The permutation vector obtained by performing AMD ordering on the KKT matrix can now be re-used between runs. Please read `AdvancedOptions.md` for usage.
+- Adding on the previous note, the permutation vector can be pre-obtained using `superADMM_preCompute.m` and `superADMM.preCompute()` in MATLAB and Python, respectively.
+- The Python interface is rewritten in Cython and comes with a pip-installable module. The idea is to make the install routine for Python also `pip install superADMM` for near future versions.
+- For Python users, the info and options structs are now dictionaries. This allows for flexible usage, where the user only has to define the options that it wants to change. This does however alter the syntax.
+
 ## V0.6.0
 - Sparse solver can now update the LDL matrices with low-rank updates. This is enabled if the updates in R are less than 5% of the number of constraints (which can be adjusted).
 - Dense solver updates P+A'RA with low rank updates, this is enabled if the updates are less than 50% of the number of constraints.

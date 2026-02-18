@@ -1,9 +1,9 @@
 % setup.m -- Sets up the use of the superADMM solver
 %   Effectively, it just adds the path to the default paths :)
 %   
-%   see also: superADMM, getSuperADMMopts
+%   see also: superADMM, superADMM_getOpts
 
-% (c) Peter Verheijen, 2025
+% (c) Peter Verheijen, 2026
 
 thisFile = mfilename('fullpath');
 thisFolder = fileparts(thisFile);

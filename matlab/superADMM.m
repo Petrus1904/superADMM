@@ -50,14 +50,16 @@
 %     tau         -- (0<tau<1) the exponential decrease rate on the bound, default 0.5
 %     alpha       -- (>=1) exponential increase rate on R, default 500
 %     RBound      -- (>>1) limits on r, default 1e8
-%     eps_abs     -- (>=0) absolute convergence bound, default 1e-8
+%     eps_abs     -- (>=0) absolute termination bound, default 1e-8
+%     eps_rel     -- (>=0) relative termination bound, default 1e-8 
 %     eps_inf     -- (>0) infeasibility bounds, default 1e-8
 %     repInterval -- (only if verbose = 1), number of iterations between
 %                    reporting the status. Default 10.
 %     timeLimit   -- solver time limit, set to <= 0 for unlimited, default 0
 %     lowRankPer  -- (0<=lowRankPer<=1) threshold for low rank updates, default 0.05
+%     Pamd        -- see help superADMM_preCompute.m
 %   
-%    one can create a struct manually, or use getSuperADMMopts() to
+%    one can create a struct manually, or use superADMM_getOpts() to
 %    obtain a full struct with the default settings.
 %
 %    If both P and A are in a sparse format, a sparse solver is used, which 
@@ -72,7 +74,7 @@
 %    ** If the problem is infeasible, the outputs x and y will be the
 %    certificate of infeasibility.
 %    
-%    see also: getSuperADMMopts
+%    see also: superADMM_getOpts, superADMM_preCompute
 
-% (c) Peter Verheijen, 2025
+% (c) Peter Verheijen, 2026
 

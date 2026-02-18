@@ -1,0 +1,20 @@
+[build-system]
+requires = [
+    "setuptools>=68",
+    "wheel",
+    "Cython>=3.0",
+    "numpy>=1.26"
+]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "superADMM"
+version = "0.7.0"
+description = "Quadratic Programming solver using a superlinear ADMM method"
+readme = "README.md"
+dependencies = ["numpy>=1.26", "scipy>=1.10"]
+requires-python = ">=3.9"
+authors = [
+    { name = "Peter Verheijen" }
+]

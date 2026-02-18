@@ -91,6 +91,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
 
     ADMMfloat *x;
     ADMMfloat *y;
+    mxArray *mxPamd;
 
     ADMMint eflag;
 
@@ -100,8 +101,10 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
     //define options
     ADMMopts opts = {DEFVERBOSE, DEFMAXITER, DEFSIGMA,
                      DEFRHO0, DEFTAU, DEFALPHA,
-                     DEFRBOUND, DEFEPSABS, DEFEPSINF,
-                     DEFREPIVAL, DEFTIMELIM, DEFLRPER};
+                     DEFRBOUND, DEFEPSABS, DEFEPSREL, DEFEPSINF,
+                     DEFREPIVAL, DEFTIMELIM, DEFLRPER, NULL};
+
+    ADMMint copyPamd = 0;
 
     if(nrhs == 8){
         //overwrite options
@@ -122,6 +125,8 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
         if(opt && mxIsScalar(opt)) opts.RBound      = mxGetScalar(opt);
         opt = mxGetField(prhs[7], 0, "eps_abs");
         if(opt && mxIsScalar(opt)) opts.eps_abs     = mxGetScalar(opt);
+        opt = mxGetField(prhs[7], 0, "eps_rel");
+        if(opt && mxIsScalar(opt)) opts.eps_rel     = mxGetScalar(opt);
         opt = mxGetField(prhs[7], 0, "eps_inf");
         if(opt && mxIsScalar(opt)) opts.eps_inf     = mxGetScalar(opt);
         opt = mxGetField(prhs[7], 0, "repInterval");
@@ -131,11 +136,22 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
         opt = mxGetField(prhs[7], 0, "lowRankPer");
         if(opt && mxIsScalar(opt)){
             opts.lowRankPer  = mxGetScalar(opt);
-        } else { //not specified
+        } else {
             if(!mxIsSparse(prhs[0])){
                 //increase this value for dense matrices
                 //appears to significantly improve performance
                 opts.lowRankPer = 0.5;
+            }
+        }
+        opt = mxGetField(prhs[7], 0, "Pamd");
+        if(opt && !mxIsEmpty(opt)){
+            //verify length
+            if(!mxIsInt64(opt)){
+                mexErrMsgIdAndTxt("superADMM:typemismatch", "Permutation vector Pamd must be of type Int64. Please use 'info.Pamd' for the correct permutation. Type 'help superADMM_preCompute' for more information.");
+            } else {
+                const mwSize *dims_Pamd = mxGetDimensions(opt);
+                if(dims_Pamd[0] != nPrim+nDual+1) mexErrMsgIdAndTxt("superADMM:sizemismatch", "Permutation vector Pamd is of incorrect length, please keep the problem size unchanged when re-using Pamd. Type 'help superADMM_preCompute' for more information.");
+                copyPamd = 1; //flag to copy the Pamd after all the error checks
             }
         }
     }
@@ -148,11 +164,19 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
     if(opts.tau == 1) mexWarnMsgIdAndTxt("superADMM:valueWarning", "tau = 1 disables the numerical bounding method, this can lead to nonconverging effects");
     if(opts.RBound < 1) mexErrMsgIdAndTxt("superADMM:valueError", "RBound must be greater than 1");
     if(opts.eps_abs < 0) mexErrMsgIdAndTxt("superADMM:valueError", "absolute convergence parameter eps_abs must be greater or equal to 0");
-    if(opts.eps_abs == 0) mexWarnMsgIdAndTxt("superADMM:valueWarning", "eps_abs = 0 prevents converging with exitflag 1 (Solved correctly), please check the solution tolerances to ensure a satisfactory solution");
+    if(opts.eps_rel < 0) mexErrMsgIdAndTxt("superADMM:valueError", "relative convergence parameter eps_rel must be greater or equal to 0");
+    if(opts.eps_abs == 0 && opts.eps_rel == 0) mexWarnMsgIdAndTxt("superADMM:valueWarning", "setting both convergence criteria to 0 prevents exiting with exitflag 1 (Solved correctly), please check the solution tolerances to ensure a satisfactory solution");
     if(opts.eps_inf <= 0) mexErrMsgIdAndTxt("superADMM:valueError", "infeasibility tolerance eps_inf must be greater than 0");
     if(opts.repInterval < 1) mexErrMsgIdAndTxt("superADMM:valueError", "repInterVal must be greater or equal to 1");
     if(opts.lowRankPer > 1 || opts.lowRankPer < 0) mexErrMsgIdAndTxt("superADMM:valueError", "Low rank update percentage (lowRankPer) must be between 0 and 1 (inclusive)");
     
+    //basic verification of u and l --> early detect infeasibilities
+    for(int i = 0; i < nDual; i++){
+        if(u[i] < l[i]){
+            mexErrMsgIdAndTxt("superADMM:infeasible", "constraint at index %d is infeasible (%.3f > %.3f)", i+1, l[i], u[i]);
+        }
+    }
+
     //check if x0, y0 exists, and initialize x and y.
     if(nrhs >= 6){
         if(!mxIsEmpty(prhs[5])){
@@ -193,7 +217,7 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
             }
         }
     }
-    
+
     //===============================END OF ERROR CHECKING=================================
 
     if(nlhs > 1){
@@ -211,16 +235,47 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
             }
         }
     }
+
+    ADMMint *Pamd = NULL;
+    if(!mxIsSparse(prhs[0])){
+        //replace Pamd with an empty matrix -- prevent errors on re-runs.
+        if(nlhs == 4){
+            mxPamd = mxCreateNumericMatrix(0, 0, mxINT64_CLASS, mxREAL);
+        }
+    } else {
+        if(nlhs == 4){
+            //only do this if the output is requested!
+            mxPamd = mxCreateNumericMatrix(nDual+nPrim+1, 1, mxINT64_CLASS, mxREAL);
+            Pamd = (ADMMint*)mxGetInt64s(mxPamd);
+        } else {
+            Pamd = (ADMMint*)malloc((nDual+nPrim+1)*sizeof(ADMMint)); //free later
+        }
+        Pamd[0] = -1; //flag to indicate data is unusable
+        if(copyPamd == 1){
+            mxArray* opt = mxGetField(prhs[7], 0, "Pamd");
+            const ADMMint* Pamd0 = (ADMMint*)mxGetInt64s(opt);
+            for(int i = 0; i < nDual + nPrim; i++){
+                //numerical checks
+                if(Pamd0[i] >= nDual + nPrim || Pamd0[i] < 0){
+                    mexErrMsgIdAndTxt("superADMM:valueError", "Permutation vector Pamd incorrectly defined.");
+                }
+                Pamd[i] = Pamd0[i]; //copy
+            }
+            Pamd[nPrim+nDual] = Pamd0[nPrim+nDual];
+        }
+    }
+    opts.Pamd = Pamd; //link
     
-    ADMMinfo res = {-1, -1.0, -1.0, -1.0, -1.0, NULL};
+    
+    ADMMinfo res = {-1, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, NULL, NULL};
     //============================== EXECUTION =============================
     if(!mxIsSparse(prhs[0])){
         //Dense routine
-
         ADMMfloat *Px = (ADMMfloat*)mxGetDoubles(prhs[0]);
         ADMMfloat *Ax = (ADMMfloat*)mxGetDoubles(prhs[2]);
         eflag = superADMMsolverDense(Px, q, Ax, l, u, x, y, nPrim, nDual, opts, &res);
 
+        
     } else {
         //Sparse routine
 
@@ -251,15 +306,20 @@ void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[]){
         plhs[2] = mxCreateDoubleScalar(eflag);
     }
     if(nlhs == 4){
-        const char* resfn[] = {"nIter", "rPrim", "rDual", "runtime", "objVal", "status"};
-        mxArray *mxresptr = mxCreateStructMatrix(1,1,6, resfn);
+        const char* resfn[] = {"nIter", "prim_res", "dual_res", "prim_tol", "dual_tol", "runtime", "objVal", "status", "Pamd"};
+        mxArray *mxresptr = mxCreateStructMatrix(1,1,9, resfn);
         mxSetField(mxresptr, 0, "nIter", mxCreateDoubleScalar(res.nIter));
-        mxSetField(mxresptr, 0, "rPrim", mxCreateDoubleScalar(res.rPrim));
-        mxSetField(mxresptr, 0, "rDual", mxCreateDoubleScalar(res.rDual));
+        mxSetField(mxresptr, 0, "prim_res", mxCreateDoubleScalar(res.prim_res));
+        mxSetField(mxresptr, 0, "dual_res", mxCreateDoubleScalar(res.dual_res));
+        mxSetField(mxresptr, 0, "prim_tol", mxCreateDoubleScalar(res.prim_tol));
+        mxSetField(mxresptr, 0, "dual_tol", mxCreateDoubleScalar(res.dual_tol));
         mxSetField(mxresptr, 0, "runtime", mxCreateDoubleScalar(res.runtime));
         mxSetField(mxresptr, 0, "objVal", mxCreateDoubleScalar(res.objVal));
         mxSetField(mxresptr, 0, "status", mxCreateString(res.status));
+        mxSetField(mxresptr, 0, "Pamd", mxPamd);
         plhs[3] = mxresptr;
+    } else {
+        free(Pamd);
     }
 }
 
