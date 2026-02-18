@@ -31,7 +31,7 @@ At this moment, we are working on changing this install routine to `pip install 
 ## MATLAB (Express installation)
 - Download the latest release (https://github.com/Petrus1904/superADMM/releases)
 - Unzip the contents in some folder
-- Run `setup.m`
+- Run `superADMM_setup.m`
 - Enjoy your fast solver in MATLAB with `superADMM.m`
 
 ## MATLAB (Manual installation)
