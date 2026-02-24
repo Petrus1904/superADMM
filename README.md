@@ -21,7 +21,7 @@ Installation is currently only available in Windows, Linux and MACOS will follow
 ## Python
 At this moment, we are working on changing this install routine to `pip install superADMM`, but as of now, that is yet unavailable. Instead, this should be the correct (and very cumbersome) install procedure.
 - Download or clone this package
-- Download and unpack **OpenBLAS** binaries (OpenBLAS-x.x.xx_x86.zip): https://github.com/OpenMathLib/OpenBLAS/releases
+- Download and unpack **OpenBLAS** binaries (OpenBLAS-x.x.xx_x64.zip): https://github.com/OpenMathLib/OpenBLAS/releases
 - In `setup.py`, change `openblas_include` and `openblas_lib` to the folder path where you unpacked OpenBLAS.
 - Open Command Prompt at the superADMM folder (that is, the main, not superADMM/superADMM)
 - `python -m build --wheel` (this will throw a bunch of warnings, which is fine. However, it can give some errors that some packages might need to be installed, install them if so)
