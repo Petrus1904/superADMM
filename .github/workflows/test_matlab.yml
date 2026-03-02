@@ -1,5 +1,5 @@
-name: Test Matlab run
-on: [workflow_dispatch]
+name: Generate Test and Coverage Artifacts
+on: [push]
 jobs:
   my-job:
     name: Run MATLAB Tests
