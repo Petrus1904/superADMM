@@ -17,7 +17,7 @@ requires-python = ">=3.9"
 authors = [
     { name = "Peter Verheijen" }
 ]
-license = "LGPL2.0"
+license = { file = "LICENSE" }
 
 [project.urls]
 Homepage = "https://github.com/Petrus1904/superADMM"
