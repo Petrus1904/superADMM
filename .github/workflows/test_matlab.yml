@@ -1,4 +1,4 @@
-name: Test Matlab runs
+name: Test Matlab run
 on: [workflow_dispatch]
 jobs:
   my-job:
