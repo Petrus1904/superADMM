@@ -1,4 +1,6 @@
 recursive-include superADMM *.pyx
 recursive-include superADMM *.dll
+recursive-include superADMM *.dylib
+recursive-include superADMM *.so*
 recursive-include src *.c
 recursive-include src *.h

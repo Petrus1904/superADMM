@@ -2,6 +2,7 @@
 # include <limits.h>
 # include <math.h>
 # include <stdio.h>
+# include <inttypes.h>
 
 # include "csparse.h"
 
@@ -96,7 +97,8 @@ CSint *cs_amd ( const cs *A, CSint order )
 	*hhead, *ATp, *ATi, d, dk, dext, lemax = 0, e, elenk, eln, i, j, k, k1,
 	k2, k3, jlast, ln, dense, nzmax, mindeg = 0, nvi, nvj, nvk, mark, wnvi,
 	ok, cnz, nel = 0, p, p1, p2, p3, p4, pj, pk, pk1, pk2, pn, q, n, m;
-    unsigned CSint h;
+    CSint h;
+    //unsigned long long int h;
     /* --- Construct matrix C ----------------------------------------------- */
     if (!A || order < 0) return (NULL);    /* check inputs; quick return */
     // AT = cs_transpose (A, 0);		    /* compute A' */
@@ -1042,7 +1044,7 @@ cs *cs_load ( FILE *f )
     cs *T;
     if (!f) return (NULL);
     T = cs_spalloc (0, 0, 1, 1, 1);
-    while (fscanf (f, "%d %d %lg\n", &i, &j, &x) == 3)
+    while (fscanf (f, "%" FMT_INT " %" FMT_INT " %lg\n", &i, &j, &x) == 3)
     {
 	if (!cs_entry (T, i, j, x)) return (cs_spfree (T));
     }
@@ -1455,24 +1457,24 @@ CSint cs_print (const cs *A, CSint brief)
 	CS_SUBSUB, CS_DATE, CS_COPYRIGHT);
     if (nz < 0)
     {
-	printf ("%d-by-%d, nzmax: %d nnz: %d, 1-norm: %g\n", m, n, nzmax,
+	printf ("%"FMT_INT"-by-%"FMT_INT", nzmax: %"FMT_INT" nnz: %"FMT_INT", 1-norm: %g\n", m, n, nzmax,
 		Ap[n], cs_norm (A));
 	for (j = 0; j < n; j++)
 	{
-	    printf ("    col %d : locations %d to %d\n", j, Ap[j], Ap[j+1]-1);
+	    printf ("    col %"FMT_INT" : locations %"FMT_INT" to %"FMT_INT"\n", j, Ap[j], Ap[j+1]-1);
 	    for (p = Ap[j]; p < Ap[j+1]; p++)
 	    {
-		printf ("      %d : %g\n", Ai[p], Ax ? Ax[p] : 1);
+		printf ("      %"FMT_INT" : %g\n", Ai[p], Ax ? Ax[p] : 1);
 		if (brief && p > 20) { printf ("  ...\n"); return (1); }
 	    }
 	}
     }
     else
     {
-	printf ("triplet: %d-by-%d, nzmax: %d nnz: %d\n", m, n, nzmax, nz);
+	printf ("triplet: %"FMT_INT"-by-%"FMT_INT", nzmax: %"FMT_INT" nnz: %"FMT_INT"\n", m, n, nzmax, nz);
 	for (p = 0; p < nz; p++)
 	{
-	    printf ("    %d %d : %g\n", Ai[p], Ap[p], Ax ? Ax[p] : 1);
+	    printf ("    %"FMT_INT" %"FMT_INT" : %g\n", Ai[p], Ap[p], Ax ? Ax[p] : 1);
 	    if (brief && p > 20) { printf ("  ...\n"); return (1); }
 	}
     }

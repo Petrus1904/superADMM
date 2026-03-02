@@ -15,43 +15,73 @@
 #include "ldl.h"
 // #include "BK_ldl.h"
 
+#if defined(_WIN32) || defined(_WIN64)
+    // Windows
+    #define IS_WINDOWS 1
+#else
+    // POSIX (Linux, macOS, Unix)
+    #define IS_POSIX 1
+#endif
+
 //overwrite
 #ifdef MATLAB_COMP
     #include <sys\time.h>
     #include "ccBlas.h"
     #include "mex.h" //MATLAB codegen knows what to do :)
     #define print mexPrintf
-    #define max(a,b) ((a) > (b) ? (a) : (b))
-    #define min(a,b) ((a) < (b) ? (a) : (b))
 #else
     #include <cblas.h>
-    #include <stdint.h>
-    #include <windows.h>
-    // #include <time.h>
-    #define print printf
-    // #define clock_gettime __pthread_clock_gettime
-    // char buf[10000];
-    // setvbuf(stdout, buf, _IOFBF, sizeof(buf));
-    typedef struct timespec{
-        LARGE_INTEGER t0;
-        LARGE_INTEGER freq;
-    } timespec;
+    #ifdef IS_WINDOWS
+        #include <stdint.h>
+        #include <windows.h>
+        // #include <time.h>
+        #define print printf
+        // #define clock_gettime __pthread_clock_gettime
+        // char buf[10000];
+        // setvbuf(stdout, buf, _IOFBF, sizeof(buf));
+        typedef struct timespec{
+            LARGE_INTEGER t0;
+            LARGE_INTEGER freq;
+        } timespec;
+    #else
+        #include <stdint.h>
+        // #include <windows.h>
+        #include <time.h>
+        #define print printf
+        // #define clock_gettime __pthread_clock_gettime
+        // char buf[10000];
+        // setvbuf(stdout, buf, _IOFBF, sizeof(buf));
+    #endif
+#endif
+
+#ifndef max
+    #define max(a,b) ((a) > (b) ? (a) : (b))
+#endif
+
+#ifndef min
+    #define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
 
 
 // Define clock IDs for compatibility
-#define CLOCK_REALTIME  0
-#define CLOCK_MONOTONIC 1
+#ifndef CLOCK_REALTIME
+    #define CLOCK_REALTIME  0
+#endif
 
-int setenv(const char *name, const char *value, ADMMint overwrite)
-{
-    ADMMint errcode = 0;
-    return _putenv_s(name, value);
-}
+#ifndef CLOCK_MONOTONIC
+    #define CLOCK_MONOTONIC 1
+#endif
+
+// ADMMint setenv(const char *name, const char *value, ADMMint overwrite)
+// {
+//     ADMMint errcode = 0;
+//     //return _putenv_s(name, value);
+//     return errcode;
+// }
 
 void startTimer(struct timespec* start){
-    #ifdef MATLAB_COMP
+    #if defined(MATLAB_COMP) || defined(IS_POSIX)
         clock_gettime(CLOCK_MONOTONIC, start);
     #else
         QueryPerformanceFrequency(&start->freq);
@@ -60,7 +90,7 @@ void startTimer(struct timespec* start){
 }
 
 ADMMfloat dTime(struct timespec* start){
-    #ifdef MATLAB_COMP
+    #if defined(MATLAB_COMP) || defined(IS_POSIX)
         struct timespec now;
         clock_gettime(CLOCK_MONOTONIC, &now);
 
@@ -89,7 +119,7 @@ void printTime(struct timespec* start){
 void printVector(const char* str, ADMMint* x, ADMMint n){
     print("%s = [", str);
     for(ADMMint i = 0; i < n; i ++){
-        print("%d ", x[i]);
+        print("%" FMT_INT " ", x[i]);
         if((i+1)%50 == 0){
             print("...\n");
         }
@@ -458,7 +488,7 @@ csldl* LDL_symb(const cs *A, ADMMint* P, ADMMint order){
     Lp[n]  = -1; //safeguard check, this should not be 0 after symbolic
 
     ldl_symbolic(n, A->p, A->i, Lp, Parent, Lnz, Flag, P, Pinv);
-    //print("LDL data: Anz=%d, lnz=%d, blkcnt=%d \n", A->p[n], Lp[n], 0);
+    //print("LDL data: Anz=%" FMT_INT ", lnz=%" FMT_INT ", blkcnt=%" FMT_INT " \n", A->p[n], Lp[n], 0);
     ADMMint lnz = Lp[n];
     if(lnz == -1){
         cs_free(Lp);
@@ -634,8 +664,6 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     //          the user should be responsible to ensure they are correct. Interfaces to python and MATLAB
     //          check this for you.
     
-    setenv("OPENBLAS_NUM_THREADS", "12", 1);
-
     if(opts.verbose > 0){
         print("===================== superADMM solver DENSE ====================\n");
     }
@@ -714,7 +742,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     if(opts.verbose == 2){
         ADMMint probSize = (nPrim*nPrim + nDual*nPrim + 2*nPrim + 3*nDual)*sizeof(ADMMfloat);
         ADMMint workSize = (5*nDual + 3*nPrim + 2*nPrim*nPrim + nDual*nPrim)*sizeof(ADMMfloat);
-        print("Problem size in memory: %d (KB)\nSolver workspace memory: %d (KB) \n", probSize/1000, workSize/1000);
+        print("Problem size in memory: %" FMT_INT " (KB)\nSolver workspace memory: %" FMT_INT " (KB) \n", probSize/1000, workSize/1000);
         print("Initialization:  ");
         printTime(&tstart);
     }
@@ -748,7 +776,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
         lapack_posv(&uplopos, &nPrim, &nrhs, tmpP, &nPrim, x, &nPrim, &LSinfo);
         
         if(LSinfo != 0){ //matrix is not positive definite. Either singular or contains negative eigenvalues (non-convex)
-            if(opts.verbose == 1) print("Cholesky failed with info: %d exiting solver\n", LSinfo);
+            if(opts.verbose == 1) print("Cholesky failed with info: %" FMT_INT " exiting solver\n", LSinfo);
             eflag = EFLAG_FAILED;
             break; //something went wrong
         }
@@ -911,7 +939,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
             if(z[i] == u[i] || z[i] == l[i]){
                 
                 if(R[i] < bound){
-                    R[i] = min(bound, R[i]*opts.alpha);
+                    R[i] = fmin(bound, R[i]*opts.alpha);
                     Rupdates++;
                     Rup[i] = (R[i]) - (Rt);
                 } else {
@@ -934,7 +962,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
         }
 
         if(opts.verbose == 1 && nIter % opts.repInterval == 0){
-            print("|  %3d | %.3e | %.3e | %.3e | %.3e |\n", nIter, rPrim, rDual, cond, bound);
+            print("|  %3"FMT_INT" | %.3e | %.3e | %.3e | %.3e |\n", nIter, rPrim, rDual, cond, bound);
             repHeadercnt++;
             if(repHeadercnt >= 25){
                 print("| Iter | rPrim     | rDual     | rCond     | Bound     | MESSAGE \n");
@@ -957,7 +985,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     switch(eflag){
         case EFLAG_MAXITER:
             exitMsg = "MAXIMUM ITERATIONS REACHED";
-            info->status = "max iteration reached";
+            info->status = "fmax iteration reached";
             break;
         case EFLAG_SOLVED:
             exitMsg = "COMPLETED";
@@ -984,7 +1012,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
             info->status = "problem non-convex";
             break;
     }
-    if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | %s\n", nIter, rPrim, rDual, cond, bound, exitMsg);
+    if(opts.verbose == 1) print("|  %3"FMT_INT" | %.3e | %.3e | %.3e | %.3e | %s\n", nIter, rPrim, rDual, cond, bound, exitMsg);
 
     if(opts.verbose == 2){
         print("Loop---------------------\n");
@@ -1023,7 +1051,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
         
         //print the final stuff
         print("\n");
-        print("Iterations:     %d\n", nIter);
+        print("Iterations:     %" FMT_INT "\n", nIter);
         print("Run Time:       %2.6f\n", info->runtime);
         print("Objective:      %.4f\n", objVal);
     } 
@@ -1070,8 +1098,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     // WARNING: superADMMsolverSparse does not perform any safety checks regarding the sizes of the inputs.
     //          the user should be responsible to ensure they are correct. Interfaces to python and MATLAB
     //          check this for you.
-
-    setenv("OPENBLAS_NUM_THREADS", "12", 1);
 
     if(opts.verbose > 0){
         print("==================== superADMM solver SPARSE ====================\n");
@@ -1155,7 +1181,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         if(S){
             ADMMint probSize = (P.nzmax + 2*nPrim + A.nzmax + 3*nDual)*sizeof(ADMMfloat) + (A.nzmax + P.nzmax + 2*nPrim + 2)*sizeof(ADMMint);
             ADMMint workSize = (5*nDual + 3*nPrim + 3*(nPrim+nDual)+ S->nnz+2*nKKT+ PARA->nzmax)*sizeof(ADMMfloat) + (8*nKKT+2+ S->nnz+PARA->nzmax)*sizeof(ADMMint);
-            print("Problem size in memory: %d (KB)\nSolver workspace memory: %d (KB) \n", probSize/1000, workSize/1000);
+            print("Problem size in memory: %" FMT_INT " (KB)\nSolver workspace memory: %" FMT_INT " (KB) \n", probSize/1000, workSize/1000);
         }
         print("Initialization:  ");
         printTime(&tstart);
@@ -1210,7 +1236,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         }
         if(LSinfo < 0){
             if(opts.verbose == 1){
-                print("iter: %d, LDL failed with info: %d exiting solver\n", nIter, LSinfo);
+                print("iter: %" FMT_INT ", LDL failed with info: %" FMT_INT " exiting solver\n", nIter, LSinfo);
                 if(opts.sigma == 0){
                     //warn that this can actually cause such a thing
                     print("The sigma option is set to zero, this can cause the solver to fail. Please retry with a positive sigma\n");
@@ -1220,7 +1246,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
             break; //something went wrong
         } else if(LSinfo < nPrim){
             if(opts.verbose == 1){
-                print("iter: %d, Problem seems to be non-convex\n", nIter);
+                print("iter: %" FMT_INT ", Problem seems to be non-convex\n", nIter);
             }
             eflag = EFLAG_NONCONVEX;
             break; //something went wrong
@@ -1387,7 +1413,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
             }
         }
         if(opts.verbose == 1 && nIter % opts.repInterval == 0){
-            print("|  %3d | %.3e | %.3e | %.3e | %.3e |\n", nIter, rPrim, rDual, cond, bound);
+            print("|  %3"FMT_INT" | %.3e | %.3e | %.3e | %.3e |\n", nIter, rPrim, rDual, cond, bound);
             repHeadercnt++;
             if(repHeadercnt >= 25){
                 print("| Iter | rPrim     | rDual     | rCond     | Bound     | MESSAGE \n");
@@ -1407,7 +1433,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
                 Rt = R[i];
                 if(z[i] == u[i] || z[i] == l[i]){
                     if(R[i] < bound){
-                        R[i] = min(bound, R[i]*opts.alpha);
+                        R[i] = fmin(bound, R[i]*opts.alpha);
                         Rupdates++;
                         Rup[i] = (-1/R[i]) - (-1/Rt);
                     } else {
@@ -1426,7 +1452,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
                 PARA->x[idx] = -1/R[i];
             }
         }
-        // print("iter: %d, Rupdates: %d \n", nIter, Rupdates);
+        // print("iter: %" FMT_INT ", Rupdates: %" FMT_INT " \n", nIter, Rupdates);
         if(opts.verbose == 2) timeLoop5 += dTime(&tLoopTask);
 
     }
@@ -1454,7 +1480,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     switch(eflag){
         case EFLAG_MAXITER:
             exitMsg = "MAXIMUM ITERATIONS REACHED";
-            info->status = "max iteration reached";
+            info->status = "fmax iteration reached";
             break;
         case EFLAG_SOLVED:
             exitMsg = "COMPLETED";
@@ -1481,7 +1507,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
             info->status = "problem non-convex";
             break;
     }
-    if(opts.verbose == 1) print("|  %3d | %.3e | %.3e | %.3e | %.3e | %s\n", nIter, rPrim, rDual, cond, bound, exitMsg);
+    if(opts.verbose == 1) print("|  %3"FMT_INT" | %.3e | %.3e | %.3e | %.3e | %s\n", nIter, rPrim, rDual, cond, bound, exitMsg);
 
     info->runtime = dTime(&ttotal);
     info->nIter = nIter;
@@ -1512,7 +1538,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         
         //print the final stuff
         print("\n");
-        print("Iterations:     %d\n", nIter);
+        print("Iterations:     %" FMT_INT "\n", nIter);
         print("Run Time:       %2.6f\n", info->runtime);
         print("Objective:      %.4f\n", objVal);
     } 

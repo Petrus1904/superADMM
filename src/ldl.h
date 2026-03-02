@@ -30,7 +30,8 @@
 #ifdef MATLAB_COMP
     #define LDL_int long long int
 #else
-    #define LDL_int int
+    #include <cblas.h>
+    #define LDL_int blasint
 #endif
 #define LDL_ID "%d"
 
