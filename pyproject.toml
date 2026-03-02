@@ -18,7 +18,6 @@ authors = [
     { name = "Peter Verheijen" }
 ]
 license = "LGPL2.0"
-license-files=["LICENSE*"]
 
 [project.urls]
 Homepage = "https://github.com/Petrus1904/superADMM"
