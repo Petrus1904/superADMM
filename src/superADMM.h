@@ -12,60 +12,127 @@
 #define BUILDTAG 
 #endif
 
+#include <cblas.h>
+#include <inttypes.h>
+
 #ifdef MATLAB_COMP
     #define ADMMint long long int
 #else
-    #define ADMMint int
+    #define ADMMint blasint
+#endif
+
+#ifdef OPENBLAS_USE64BITINT
+    #ifdef OPENBLAS_OS_DARWIN
+        #define FMT_INT "ld"
+    #else
+        #define FMT_INT PRId64
+    #endif
+    
+#else
+    #define FMT_INT PRId32
 #endif
 
 #ifndef USE_SINGLE_PRECISION
     #define ADMMfloat double
-    #define cblas_ger cblas_dger
-    #define cblas_syr cblas_dsyr
-    #define cblas_copy cblas_dcopy
-    #define cblas_scal cblas_dscal
-    #define cblas_syrk cblas_dsyrk
-    #define cblas_gemv cblas_dgemv
-    #define cblas_symv cblas_dsymv
-    #define cblas_trsv cblas_dtrsv
-    #define cblas_amax cblas_damax
-    #define cblas_axpy cblas_daxpy
-    #define cblas_dot cblas_ddot
+    #if INTPTR_MAX == INT64_MAX
+        #define cblas_ger scipy_cblas_dger64_
+        #define cblas_syr scipy_cblas_dsyr64_
+        #define cblas_copy scipy_cblas_dcopy64_
+        #define cblas_scal scipy_cblas_dscal64_
+        #define cblas_syrk scipy_cblas_dsyrk64_
+        #define cblas_gemv scipy_cblas_dgemv64_
+        #define cblas_symv scipy_cblas_dsymv64_
+        #define cblas_trsv scipy_cblas_dtrsv64_
+        #define cblas_amax scipy_cblas_damax64_
+        #define cblas_axpy scipy_cblas_daxpy64_
+        #define cblas_dot scipy_cblas_ddot64_
 
-    // extern void dgesv_(const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, ADMMint *ipiv, double *b, const ADMMint *ldb, ADMMint *info);
-    extern void dposv(const char *uplo, const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, double *b, const ADMMint *ldb, ADMMint *info);
-    // extern void dlaset_(const char *uplo, const ADMMint *m, const ADMMint *n, const double *alpha, const double *beta, double *a, const ADMMint *lda);
-    extern void dlacpy(const char* uplo, const ADMMint *m, const ADMMint *n, const double* a, const ADMMint *lda, double* b, const ADMMint *ldb);
-    // extern void dsysv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, ADMMint *ipiv, double *b, const ADMMint *ldb, double *work, const ADMMint *lwork, ADMMint *info);
 
-    // #define lapack_gesv dgesv_
-    #define lapack_posv dposv
-    // #define lapack_laset dlaset_
-    #define lapack_lacpy dlacpy
-    // #define lapack_sysv dsysv_
+        // extern void dgesv_(const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, ADMMint *ipiv, double *b, const ADMMint *ldb, ADMMint *info);
+        extern void scipy_dposv_64_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, double *b, const ADMMint *ldb, ADMMint *info);
+        // extern void dlaset_(const char *uplo, const ADMMint *m, const ADMMint *n, const double *alpha, const double *beta, double *a, const ADMMint *lda);
+        extern void scipy_dlacpy_64_(const char* uplo, const ADMMint *m, const ADMMint *n, const double* a, const ADMMint *lda, double* b, const ADMMint *ldb);
+        // extern void dsysv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, ADMMint *ipiv, double *b, const ADMMint *ldb, double *work, const ADMMint *lwork, ADMMint *info);
+
+        // #define lapack_gesv dgesv_
+        #define lapack_posv scipy_dposv_64_
+        // #define lapack_laset dlaset_
+        #define lapack_lacpy scipy_dlacpy_64_
+    #elif INTPTR_MAX == INT32_MAX
+        #define cblas_ger scipy_cblas_dger
+        #define cblas_syr scipy_cblas_dsyr
+        #define cblas_copy scipy_cblas_dcopy
+        #define cblas_scal scipy_cblas_dscal
+        #define cblas_syrk scipy_cblas_dsyrk
+        #define cblas_gemv scipy_cblas_dgemv
+        #define cblas_symv scipy_cblas_dsymv
+        #define cblas_trsv scipy_cblas_dtrsv
+        #define cblas_amax scipy_cblas_damax
+        #define cblas_axpy scipy_cblas_daxpy
+        #define cblas_dot scipy_cblas_ddot
+
+
+        // extern void dgesv_(const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, ADMMint *ipiv, double *b, const ADMMint *ldb, ADMMint *info);
+        extern void scipy_dposv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, double *b, const ADMMint *ldb, ADMMint *info);
+        // extern void dlaset_(const char *uplo, const ADMMint *m, const ADMMint *n, const double *alpha, const double *beta, double *a, const ADMMint *lda);
+        extern void scipy_dlacpy_(const char* uplo, const ADMMint *m, const ADMMint *n, const double* a, const ADMMint *lda, double* b, const ADMMint *ldb);
+        // extern void dsysv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, double *a, const ADMMint *lda, ADMMint *ipiv, double *b, const ADMMint *ldb, double *work, const ADMMint *lwork, ADMMint *info);
+
+        // #define lapack_gesv dgesv_
+        #define lapack_posv scipy_dposv_
+        // #define lapack_laset dlaset_
+        #define lapack_lacpy scipy_dlacpy_
+    #endif
 #else
     #define ADMMfloat float
-    #define cblas_ger cblas_sger
-    #define cblas_copy cblas_scopy
-    #define cblas_scal cblas_sscal
-    #define cblas_syrk cblas_ssyrk
-    #define cblas_gemv cblas_sgemv
-    #define cblas_symv cblas_ssymv
-    #define cblas_amax cblas_samax
-    #define cblas_axpy cblas_saxpy
-    #define cblas_dot cblas_sdot
+    #if INTPTR_MAX == INT64_MAX
+        #define cblas_ger scipy_cblas_sger64_
+        #define cblas_copy scipy_cblas_scopy64_
+        #define cblas_scal scipy_cblas_sscal64_
+        #define cblas_syrk scipy_cblas_ssyrk64_
+        #define cblas_gemv scipy_cblas_sgemv64_
+        #define cblas_symv scipy_cblas_ssymv64_
+        #define cblas_amax scipy_cblas_samax64_
+        #define cblas_axpy scipy_cblas_saxpy64_
+        #define cblas_dot scipy_cblas_sdot64_
 
-    extern void sgesv_(const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, ADMMint *ipiv, float *b, const ADMMint *ldb, ADMMint *info);
-    extern void sposv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, float *b, const ADMMint *ldb, ADMMint *info);
-    extern void slaset_(const char *uplo, const ADMMint *m, const ADMMint *n, const float *alpha, const float *beta, float *a, const ADMMint *lda);
-    extern void slacpy_(const char* uplo, const int* m, const int* n, const float* a, const int* lda, float* b, const int* ldb);
-    extern void ssysv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, ADMMint *ipiv, float *b, const ADMMint *ldb, float *work, const ADMMint *lwork, ADMMint *info);
+        extern void scipy_sgesv_64_(const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, ADMMint *ipiv, float *b, const ADMMint *ldb, ADMMint *info);
+        extern void scipy_sposv_64_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, float *b, const ADMMint *ldb, ADMMint *info);
+        extern void scipy_slaset_64_(const char *uplo, const ADMMint *m, const ADMMint *n, const float *alpha, const float *beta, float *a, const ADMMint *lda);
+        extern void scipy_slacpy_64_(const char* uplo, const int* m, const int* n, const float* a, const int* lda, float* b, const int* ldb);
+        extern void scipy_ssysv_64_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, ADMMint *ipiv, float *b, const ADMMint *ldb, float *work, const ADMMint *lwork, ADMMint *info);
 
-    #define lapack_gesv sgesv_
-    #define lapack_posv sposv_
-    #define lapack_laset slaset_
-    #define lapack_lacpy slacpy_
-    #define lapack_sysv ssysv_
+        #define lapack_gesv scipy_sgesv_64_
+        #define lapack_posv scipy_sposv_64_
+        #define lapack_laset scipy_slaset_64_
+        #define lapack_lacpy scipy_slacpy_64_
+        #define lapack_sysv scipy_ssysv_64_
+    #elif INTPTR_MAX == INT32_MAX
+        #define cblas_ger scipy_cblas_sger
+        #define cblas_copy scipy_cblas_scopy
+        #define cblas_scal scipy_cblas_sscal
+        #define cblas_syrk scipy_cblas_ssyrk
+        #define cblas_gemv scipy_cblas_sgemv
+        #define cblas_symv scipy_cblas_ssymv
+        #define cblas_amax scipy_cblas_samax
+        #define cblas_axpy scipy_cblas_saxpy
+        #define cblas_dot scipy_cblas_sdot
+
+        extern void scipy_sgesv_(const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, ADMMint *ipiv, float *b, const ADMMint *ldb, ADMMint *info);
+        extern void scipy_sposv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, float *b, const ADMMint *ldb, ADMMint *info);
+        extern void scipy_slaset_(const char *uplo, const ADMMint *m, const ADMMint *n, const float *alpha, const float *beta, float *a, const ADMMint *lda);
+        extern void scipy_slacpy_(const char* uplo, const int* m, const int* n, const float* a, const int* lda, float* b, const int* ldb);
+        extern void scipy_ssysv_(const char *uplo, const ADMMint *n, const ADMMint *nrhs, float *a, const ADMMint *lda, ADMMint *ipiv, float *b, const ADMMint *ldb, float *work, const ADMMint *lwork, ADMMint *info);
+
+        #define lapack_gesv scipy_sgesv_
+        #define lapack_posv scipy_sposv_
+        #define lapack_laset scipy_slaset_
+        #define lapack_lacpy scipy_slacpy_
+        #define lapack_sysv scipy_ssysv_
+    #endif
+
+
+
 #endif
 
 typedef struct ADMMopts{

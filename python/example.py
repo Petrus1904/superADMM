@@ -8,7 +8,6 @@ from scipy.sparse import csc_matrix
 import os, sys
 import superADMM
 
-
 if __name__ == '__main__':
     #sample code
     Q = 2 * np.eye(5)
@@ -23,7 +22,7 @@ if __name__ == '__main__':
     u = np.hstack((b, np.array([10, 10, 10, 10, 10])))
 
     # opts = superADMM.getOptimOpts()
-    opts = {"verbose": 2}
+    opts = {"verbose": 1}
     #solve dense
     [x, y, eflag, info] = superADMM.superADMM(Q, c, A, l, u, options = opts)
     print(x)

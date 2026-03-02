@@ -4,6 +4,7 @@
 #ifdef MATLAB_MEX_FILE
 #include "mex.h"
 #endif
+#include "superADMM.h"
 #define CS_VER 1		    /* CSparse Version 1.2.0 */
 #define CS_SUBVER 2
 #define CS_SUBSUB 0
@@ -20,8 +21,10 @@
 #ifdef MATLAB_COMP
     #define CSint long long int
 #else
-    #define CSint int
+    #include <cblas.h>
+    #define CSint blasint
 #endif
+
 
 /* --- primary CSparse routines and data structures ------------------------- */
 typedef struct cs_sparse    /* matrix in compressed-column or triplet form */

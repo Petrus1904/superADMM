@@ -10,62 +10,64 @@ np.import_array()   #<-- Required!
 
 # C declarations
 cdef extern from "superADMM.h":
+    ctypedef long long int ADMMint
+    ctypedef double ADMMfloat
 
     ctypedef struct ADMMopts:
-        int verbose
-        int maxIter
-        double sigma
-        double rho_0
-        double tau
-        double alpha
-        double RBound
-        double eps_abs
-        double eps_rel
-        double eps_inf
-        int repInterval
-        double timeLimit
-        double lowRankPer
-        int* Pamd
+        ADMMint verbose
+        ADMMint maxIter
+        ADMMfloat sigma
+        ADMMfloat rho_0
+        ADMMfloat tau
+        ADMMfloat alpha
+        ADMMfloat RBound
+        ADMMfloat eps_abs
+        ADMMfloat eps_rel
+        ADMMfloat eps_inf
+        ADMMint repInterval
+        ADMMfloat timeLimit
+        ADMMfloat lowRankPer
+        ADMMint* Pamd
 
     ctypedef struct ADMMinfo:
-        int nIter
-        double prim_res
-        double dual_res
-        double prim_tol
-        double dual_tol
-        double runtime
-        double objVal
+        ADMMint nIter
+        ADMMfloat prim_res
+        ADMMfloat dual_res
+        ADMMfloat prim_tol
+        ADMMfloat dual_tol
+        ADMMfloat runtime
+        ADMMfloat objVal
         char* status
-        int* Pamd
+        ADMMint* Pamd
 
-    int superADMMsolverDense(
-        const double* P, 
-        const double* q,
-        const double* A,
-        const double* l,
-        const double* u,
-        double* x,
-        double* y,
-        int nPrim,
-        int nDual,
+    ADMMint superADMMsolverDense(
+        const ADMMfloat* P, 
+        const ADMMfloat* q,
+        const ADMMfloat* A,
+        const ADMMfloat* l,
+        const ADMMfloat* u,
+        ADMMfloat* x,
+        ADMMfloat* y,
+        ADMMint nPrim,
+        ADMMint nDual,
         ADMMopts opts,
         ADMMinfo* info
     )
 
-    int superADMMsolverSparse(
-        double* Pdata, 
-        int* Prowptr, 
-        int* Pcolidx, 
-        const double* q,
-        double* Adata,
-        int* Arowptr,
-        int* Acolidx,
-        const double* l,
-        const double* u,
-        double* x,
-        double* y,
-        int nPrim,
-        int nDual,
+    ADMMint superADMMsolverSparse(
+        ADMMfloat* Pdata, 
+        ADMMint* Prowptr, 
+        ADMMint* Pcolidx, 
+        const ADMMfloat* q,
+        ADMMfloat* Adata,
+        ADMMint* Arowptr,
+        ADMMint* Acolidx,
+        const ADMMfloat* l,
+        const ADMMfloat* u,
+        ADMMfloat* x,
+        ADMMfloat* y,
+        ADMMint nPrim,
+        ADMMint nDual,
         ADMMopts opts,
         ADMMinfo* info
     )
@@ -80,8 +82,8 @@ cdef _superADMM_dense(np.ndarray[np.float64_t, ndim=2, mode="fortran"] P,
                       ADMMopts c_opts):
     # all error checking performed by calling function
     # pointers
-    cdef int nPrim = int(P.shape[0])
-    cdef int nDual = int(A.shape[0])
+    cdef ADMMint nPrim = <ADMMint> P.shape[0]
+    cdef ADMMint nDual = <ADMMint> A.shape[0]
     cdef const double* q_ptr = <double*> q.data
     cdef const double* l_ptr = <double*> l.data
     cdef const double* u_ptr = <double*> u.data
@@ -89,7 +91,7 @@ cdef _superADMM_dense(np.ndarray[np.float64_t, ndim=2, mode="fortran"] P,
     cdef double* y_ptr = <double*>y.data
 
     cdef ADMMinfo out_info
-    cdef int eflag
+    cdef ADMMint eflag
     cdef const double* P_ptr = <double*> P.data
     cdef const double* A_ptr = <double*> A.data
     eflag = superADMMsolverDense(P_ptr, q_ptr, A_ptr, l_ptr, u_ptr,
@@ -115,11 +117,11 @@ cdef _superADMM_sparse(object P,
                       np.ndarray[np.float64_t, ndim=1] u,
                       np.ndarray[np.float64_t, ndim=1] x,
                       np.ndarray[np.float64_t, ndim=1] y,
-                      ADMMopts c_opts, np.ndarray[np.int32_t, ndim=1] pyPamd):
+                      ADMMopts c_opts, np.ndarray[np.int64_t, ndim=1] pyPamd):
     # all error checking performed by calling function
     # pointers
-    cdef int nPrim = int(P.shape[0])
-    cdef int nDual = int(A.shape[0])
+    cdef ADMMint nPrim = <ADMMint> P.shape[0]
+    cdef ADMMint nDual = <ADMMint> A.shape[0]
     cdef const double* q_ptr = <double*> q.data
     cdef const double* l_ptr = <double*> l.data
     cdef const double* u_ptr = <double*> u.data
@@ -127,22 +129,22 @@ cdef _superADMM_sparse(object P,
     cdef double* y_ptr = <double*>y.data
 
     cdef ADMMinfo out_info
-    cdef int eflag
+    cdef ADMMint eflag
     cdef np.ndarray[np.float64_t, ndim=1] Pdata = P.data
-    cdef np.ndarray[np.int32_t, ndim=1] Pind = P.indices
-    cdef np.ndarray[np.int32_t, ndim=1] Pptr = P.indptr
+    cdef np.ndarray[np.int64_t, ndim=1] Pind = P.indices.astype(np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1] Pptr = P.indptr.astype(np.int64)
 
     cdef double* Pdata_ptr = <double*> Pdata.data
-    cdef int* Pind_ptr = <int*> Pind.data
-    cdef int* Pptr_ptr = <int*> Pptr.data
+    cdef ADMMint* Pind_ptr = <ADMMint*> Pind.data
+    cdef ADMMint* Pptr_ptr = <ADMMint*> Pptr.data
 
     cdef np.ndarray[np.float64_t, ndim=1] Adata = A.data
-    cdef np.ndarray[np.int32_t, ndim=1] Aind = A.indices
-    cdef np.ndarray[np.int32_t, ndim=1] Aptr = A.indptr
+    cdef np.ndarray[np.int64_t, ndim=1] Aind = A.indices.astype(np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1] Aptr = A.indptr.astype(np.int64)
 
     cdef double* Adata_ptr = <double*> Adata.data
-    cdef int* Aind_ptr = <int*> Aind.data
-    cdef int* Aptr_ptr = <int*> Aptr.data
+    cdef ADMMint* Aind_ptr = <ADMMint*> Aind.data
+    cdef ADMMint* Aptr_ptr = <ADMMint*> Aptr.data
     eflag = superADMMsolverSparse(Pdata_ptr, Pptr_ptr, Pind_ptr, q_ptr,
                                     Adata_ptr, Aptr_ptr, Aind_ptr, l_ptr, u_ptr,
                                     x_ptr, y_ptr, nPrim, nDual, c_opts, &out_info)
@@ -278,8 +280,8 @@ def superADMM(P, q, A, l, u, x0=None, y0=None, options=None):
     if P.ndim != 2:
         raise IndexError("P must be a 2 dimensional matrix")
 
-    cdef int nPrim = int(P.shape[0])
-    cdef int nDual = int(A.shape[0])
+    cdef ADMMint nPrim = <ADMMint> P.shape[0]
+    cdef ADMMint nDual = <ADMMint> A.shape[0]
 
     q = np.asarray(q, dtype=np.float64)
     if q.ndim != 1:
@@ -315,7 +317,7 @@ def superADMM(P, q, A, l, u, x0=None, y0=None, options=None):
         raise IndexError("l must have the same number of elements as rows in A")
 
 
-    cdef np.ndarray[np.int32_t, ndim=1] pyPamd = np.zeros(nPrim+nDual+1, dtype=np.int32)
+    cdef np.ndarray[np.int64_t, ndim=1] pyPamd = np.zeros(nPrim+nDual+1, dtype=np.int64)
     pyPamd[0] = -1 #this flags superADMM to perform AMD
     #ADMM options
     cdef ADMMopts c_opts 
@@ -368,7 +370,7 @@ def superADMM(P, q, A, l, u, x0=None, y0=None, options=None):
             #copy
             pyPamd = np.copy(Pin)
 
-    c_opts.Pamd = <int*> pyPamd.data
+    c_opts.Pamd = <ADMMint*> pyPamd.data
 
     #check options
     if c_opts.verbose < 0 or c_opts.verbose > 2:
@@ -516,8 +518,8 @@ def preCompute(P, A):
         raise TypeError("A must be a scipy.sparse.csc_matrix")
 
     options = {"verbose":0,"maxIter":0} 
-    cdef int nPrim = P.shape[0]
-    cdef int nDual = A.shape[0]
+    cdef ADMMint nPrim = P.shape[0]
+    cdef ADMMint nDual = A.shape[0]
     cdef np.ndarray[np.float64_t, ndim=1] q = np.zeros(nPrim, dtype=np.float64)
     cdef np.ndarray[np.float64_t, ndim=1] l = np.zeros(nDual, dtype=np.float64)
     cdef np.ndarray[np.float64_t, ndim=1] u = np.zeros(nDual, dtype=np.float64)

@@ -1,12 +1,11 @@
 [build-system]
 requires = [
-    "setuptools>=68",
+    "setuptools>=82.0.0",
     "wheel",
     "Cython>=3.0",
-    "numpy>=1.26"
+    "numpy>=2.0.2",
+    "scipy_openblas64"
 ]
-build-backend = "setuptools.build_meta"
-
 
 [project]
 name = "superADMM"
@@ -18,3 +17,10 @@ requires-python = ">=3.9"
 authors = [
     { name = "Peter Verheijen" }
 ]
+
+[tool.cibuildwheel]
+# Skip 32-bit builds
+skip = ["*-win32", "*-manylinux_i686", "cp39-musllinux_aarch64"]
+# Trigger an install of the package, but run nothing of note
+test-command = "python python/example.py"
+test-sources = ["python"]
