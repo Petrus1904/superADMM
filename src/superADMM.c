@@ -154,17 +154,15 @@ void updatePARA(const ADMMfloat* A, const ADMMfloat* Rup, ADMMfloat* PARA, ADMMi
 }
 
 void computePARA(const ADMMfloat* P, const ADMMfloat* A, const ADMMfloat* R, const ADMMfloat sigma, ADMMfloat* tmp, ADMMfloat* out, ADMMint nDual, ADMMint nPrim){
-    //computes P+A^T*R*A -- we assume column major data --ONLY UPPER TRIANGLE
+    //computes P+A^T*R*A -- we assume column major data --ONLY LOWER TRIANGLE
     //copy
     char uplo = 'L';
     cblas_copy(nDual*nPrim, A, 1, tmp, 1);
     lapack_lacpy(&uplo, &nPrim, &nPrim, P, &nPrim, out, &nPrim);
-    // cblas_copy(nPrim*nPrim, P, 1, out, 1);
     //scale tmp = R*A;
     for(ADMMint i = 0; i < nDual; i++){
         cblas_scal(nPrim, sqrt(R[i]), &tmp[i],nDual);
     }
-    //cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans, nPrim, nPrim, nDual, 1.0, tmp, nDual, A, nDual, 1.0, out, nPrim);
     //Symmetric rank k update of full size is cheaper than dgemm
     cblas_syrk(CblasColMajor, CblasLower, CblasTrans, nPrim, nDual, 1.0, tmp, nDual, 1.0, out, nPrim);
     
@@ -564,7 +562,7 @@ cs* assemblePARA_cs(const cs* P, const cs* A, const ADMMfloat* R, const ADMMfloa
         //iterate per column
         ADMMint hasDiag = 0;
         for(j = P->p[i]; j < P->p[i+1]; j++){
-            if(P->i[j] > i && hasDiag == 0){
+            if(P->i[j] > i && hasDiag == 0 && sigma > 0){
                 //col P_i zero on diagonal, include sigma
                 PAx[k] = sigma;
                 PAi[k] = i;
@@ -579,7 +577,7 @@ cs* assemblePARA_cs(const cs* P, const cs* A, const ADMMfloat* R, const ADMMfloa
             }
             k++;
         }
-        if(hasDiag == 0){
+        if(hasDiag == 0 && sigma > 0){
             //col P_i was strict upper triangular
             PAx[k] = sigma;
             PAi[k] = i;
@@ -613,18 +611,6 @@ cs* assemblePARA_cs(const cs* P, const cs* A, const ADMMfloat* R, const ADMMfloa
             PARAnz[A->i[j]]++;
         }
     }
-    // for(i = 0; i < nDual; i++){
-    //     //iterate per column
-    //     for(ADMMint j = AT->p[i]; j < AT->p[i+1]; j++){
-    //         PARA->x[k] = AT->x[j];
-    //         PARA->i[k] = AT->i[j];
-    //         k++;
-    //     }
-    //     PARA->x[k] = -1/R[i];
-    //     PARA->i[k] = nPrim + i; //diagonal
-    //     k++;
-    //     PARA->p[nPrim+i+1] = k;
-    // }
     //cs_sprealloc allocates PARA->p with the wrong size...
     cs_free(PARAnz);
     PARA->nzmax = PAp[nPrim+nDual];
@@ -665,7 +651,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     //          check this for you.
     
     if(opts.verbose > 0){
-        print("===================== superADMM solver DENSE ====================\n");
+        print("================== superADMM solver DENSE %s =================\n", VERSION);
     }
     if(opts.verbose == 1){
         print("| Iter | rPrim     | rDual     | rCond     | Bound     | MESSAGE \n");
@@ -742,7 +728,7 @@ BUILDTAG ADMMint superADMMsolverDense(const ADMMfloat* P, /* (nPrim x nPrim) qua
     if(opts.verbose == 2){
         ADMMint probSize = (nPrim*nPrim + nDual*nPrim + 2*nPrim + 3*nDual)*sizeof(ADMMfloat);
         ADMMint workSize = (5*nDual + 3*nPrim + 2*nPrim*nPrim + nDual*nPrim)*sizeof(ADMMfloat);
-        print("Problem size in memory: %" FMT_INT " (KB)\nSolver workspace memory: %" FMT_INT " (KB) \n", probSize/1000, workSize/1000);
+        print("Problem size in memory: %" FMT_INT " (B)\nSolver workspace memory: %" FMT_INT " (B) \n", probSize, workSize);
         print("Initialization:  ");
         printTime(&tstart);
     }
@@ -1100,7 +1086,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     //          check this for you.
 
     if(opts.verbose > 0){
-        print("==================== superADMM solver SPARSE ====================\n");
+        print("================= superADMM solver SPARSE %s =================\n", VERSION);
     }
     if(opts.verbose == 1){
         print("| Iter | rPrim     | rDual     | rCond     | Bound     | MESSAGE \n");
@@ -1149,12 +1135,6 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
     ADMMfloat rPrim = 1.0;
     ADMMfloat rDual = 1.0;
     ADMMfloat cond;
-
-    //check if bound is good
-    // ADMMfloat Pmax = cblas_amax(P.nzmax, P.x, 1);
-    // if(Pmax*1e4 > bound){
-    //     bound = Pmax*1e4;
-    // }
     ADMMint nKKT = nDual+nPrim;
 
     ADMMfloat q_rel = cblas_amax(nPrim, q, 1);
@@ -1181,7 +1161,7 @@ BUILDTAG ADMMint superADMMsolverSparse(ADMMfloat* Pdata,    /* (Pnnz) non-zero v
         if(S){
             ADMMint probSize = (P.nzmax + 2*nPrim + A.nzmax + 3*nDual)*sizeof(ADMMfloat) + (A.nzmax + P.nzmax + 2*nPrim + 2)*sizeof(ADMMint);
             ADMMint workSize = (5*nDual + 3*nPrim + 3*(nPrim+nDual)+ S->nnz+2*nKKT+ PARA->nzmax)*sizeof(ADMMfloat) + (8*nKKT+2+ S->nnz+PARA->nzmax)*sizeof(ADMMint);
-            print("Problem size in memory: %" FMT_INT " (KB)\nSolver workspace memory: %" FMT_INT " (KB) \n", probSize/1000, workSize/1000);
+            print("Problem size in memory: %" FMT_INT " (B)\nSolver workspace memory: %" FMT_INT " (B) \n", probSize, workSize);
         }
         print("Initialization:  ");
         printTime(&tstart);
