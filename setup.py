@@ -76,8 +76,6 @@ if platform.system() == "Windows":
     pass
 elif platform.system() == "Linux":
     extra_link_args.append("-Wl,-rpath,$ORIGIN")
-    extra_compile_args.append("-g")
-    extra_compile_args.append("-O0")
 elif platform.system() == "Darwin":
     extra_link_args.append("-Wl,-rpath,@loader_path")
 
