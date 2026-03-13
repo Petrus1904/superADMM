@@ -1,4 +1,8 @@
 # Patch Notes
+## V0.7.1
+- Installing superADMM for Python is now super easy with `pip install superadmm`. we require python >= 3.9, but earlier versions could be build upon request. It now also supports MacOS and all Linux OS's part of manylinux and musllinux.
+- Version number is now printed in the header of the solver.
+   
 ## V0.7.0
 - Relative termination criteria are now included. The solver now terminates if $\|Ax^k-z^k\|\leq \epsilon_{abs}+\epsilon_{rel}\max(\|Ax^k\|, \|z^k\|)$ and $\|Px^k+Ay^k+q\|\leq \epsilon_{abs}+\epsilon_{rel}\max(\|Px^k\|, \|Ay^k\|, \|q\|)$. `opts.eps_rel` is added as a solver options to tweak this bound. Set to zero to disable relative termination, default `1e-8`.
 - As a result of the change above, the info package at the end of the solver also includes the considered termination criteria, to avoid confusion.
