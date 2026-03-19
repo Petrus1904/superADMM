@@ -1,18 +1,17 @@
 %% test function with test QP problem
 P = 2*eye(5);
 q = [-2; -6; -8; -4; -10];
-Aeq = [1 1 1 1 1; ...
-       1 -1 1 -1 1; ...
+Aeq = [1 -1 1 -1 1; ...
       -1 -1 -1 -1 -1; ...
        1 2 3 4 5];
 
-beq = [10;3;-10;20];
+beq = [3;-10;20];
 A = [Aeq; eye(5)];
-l = [-inf*ones(4,1); zeros(5,1)];
+l = [-inf*ones(3,1); zeros(5,1)];
 u = [beq; 10*ones(5,1)];
 
 xt = [3.4; 3.6; 2.8; 0; 0.2];
-yt = [0; 0; 8.4; 3.6; 0; 0; 0; -2; 0];
+yt = [0; 8.4; 3.6; 0; 0; 0; -2; 0];
 
 % use opts = superADMM_getOpts() to obtain a list of the default settings. However
 % this is completely optional. superADMM() can also take a struct with only the options
@@ -21,8 +20,8 @@ yt = [0; 0; 8.4; 3.6; 0; 0; 0; -2; 0];
 opts.verbose = 1; %turn on iterative display
 
 % test dense
-[x,y,eflag,info1] = superADMM(P, q, A, l, u, [], [], opts);
-if(eflag == 1)
+[x1,y1,eflag1,info1] = superADMM(P, q, A, l, u, [], [], opts);
+if(eflag1 == 1 && norm(xt-x1, inf) < 1e-7 && norm(yt-y1, inf) < 1e-7)
     %OK
     nbytes = fprintf('superADMM dense solver executed successfully!\n');
 else
@@ -31,7 +30,7 @@ end
 
 % test sparse
 [x2,y2,eflag2,info2] = superADMM(sparse(P), q, sparse(A), l, u, [], [], opts);
-if(eflag == 1)
+if(eflag2 == 1 && norm(xt-x2, inf) < 1e-7 && norm(A'*(yt-y2), inf) < 1e-7)
     %OK
     nbytes = fprintf('superADMM sparse solver executed successfully!\n');
 else

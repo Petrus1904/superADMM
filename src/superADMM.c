@@ -1,6 +1,6 @@
 /*
     Source file for the superADMM solver
-    Created by Peter Verheijen, 2024.
+    Created by Peter Verheijen, 2026.
     compile string for python: gcc -shared -o superADMM.dll ../src/superADMM.c ../src/csparse.c ../src/ldl.c -I"C:\OpenBLAS\include" -L"C:\OpenBLAS\lib" -lopenblas -DBUILD_DLL
 */
 
@@ -25,6 +25,7 @@
 
 //overwrite
 #ifdef MATLAB_COMP
+    //TODO: include MATLAB timing to ensure code compiles with both gcc and msvc
     #include <sys\time.h>
     #include "ccBlas.h"
     #include "mex.h" //MATLAB codegen knows what to do :)
@@ -34,23 +35,15 @@
     #ifdef IS_WINDOWS
         #include <stdint.h>
         #include <windows.h>
-        // #include <time.h>
         #define print printf
-        // #define clock_gettime __pthread_clock_gettime
-        // char buf[10000];
-        // setvbuf(stdout, buf, _IOFBF, sizeof(buf));
         typedef struct timespec{
             LARGE_INTEGER t0;
             LARGE_INTEGER freq;
         } timespec;
     #else
         #include <stdint.h>
-        // #include <windows.h>
         #include <time.h>
         #define print printf
-        // #define clock_gettime __pthread_clock_gettime
-        // char buf[10000];
-        // setvbuf(stdout, buf, _IOFBF, sizeof(buf));
     #endif
 #endif
 
